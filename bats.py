@@ -1,6 +1,9 @@
+import warnings
+warnings.filterwarnings("ignore", category=RuntimeWarning)
+
 import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib.colors import Normalize
+import matplotlib.colors as colors
 
 from dataloader import load_data
 from powerspectrum import spectrogram, decibel
@@ -82,7 +85,7 @@ if __name__ == '__main__':
 
     # Get the data
     recording = '../../data/pc-tape_recordings/' \
-                'macaregua__february_2018/natalus_outside_cave/natalusTumidirostris0012.wav'
+                'macaregua__february_2018/natalus_outside_cave/natalusTumidirostris0045.wav'
 
     d, sr, u = load_data(recording)
     sr *= 10.  # This fixes PC-Tape's bug that writes 1/10 of the samplingrate in the header of the .wav file
@@ -90,14 +93,25 @@ if __name__ == '__main__':
     f_res = 1000.  # in Hz
     spec, f, t = spectrogram(d.squeeze(), sr, f_res, overlap_frac=0.9)
 
-    # remove mean noise
-    mean_channel_power = np.mean(spec)
-    spec -= mean_channel_power
+    # set dynamic range
+    dyn_range = 50  # in dB
+    dec_spec = decibel(spec)
+    ampl_max = np.nanmax(dec_spec)  # define maximum; use nanmax, because decibel function may contain NaN values
+    dec_spec -= ampl_max + 1e-20  # subtract maximum so that the maximum value is set to lim x--> -0
+    dec_spec[dec_spec < -dyn_range] = -dyn_range
 
+    inch_factor = 2.54
+    fig, ax = plt.subplots(figsize=(56./inch_factor, 40./inch_factor))
+    im = ax.imshow(dec_spec, cmap='jet', extent=[t[0], t[-1], f[0], f[-1]], aspect='auto', origin='lower',
+                   alpha=0.7)
     # in imshow, parameter extent sets the canvas edges!
-    # ToDo: Reset colorbar scale! I don't get the blues, because I have no negative values
-    plt.imshow(decibel(spec), cmap='jet', extent=[t[0], t[-1], f[0], f[-1]], aspect='auto', origin='lower',
-               alpha=0.7)
-    plt.ylabel('Frequency [Hz]')
-    plt.xlabel('Time [sec]')
+
+    # ToDo: Impossible to update the colorbar ticks for them to be multiples of 10!!!
+    cb_ticks = np.arange(0, dyn_range + 10, 10)
+
+    cb = fig.colorbar(im)
+
+    cb.set_label('dB')
+    ax.set_ylabel('Frequency [Hz]')
+    ax.set_xlabel('Time [sec]')
     plt.show()
