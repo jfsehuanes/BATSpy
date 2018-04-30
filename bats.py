@@ -3,7 +3,6 @@ warnings.filterwarnings("ignore", category=RuntimeWarning)
 
 import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib.colors as colors
 
 from dataloader import load_data
 from powerspectrum import spectrogram, decibel
@@ -11,74 +10,72 @@ from powerspectrum import spectrogram, decibel
 from IPython import embed
 
 
-def correct_spectogram_ratio(spec_data, nfft, samplerate, start_time, end_time, noice_cancel=False):
+class Batspy:
 
-    if noice_cancel:
-        mean_channel_power = np.mean(spec_data, axis=0)
-        a = spec_data - mean_channel_power
-    else:
-        a = spec_data
+    def __init__(self, file_path, f_resolution=1000., overlap_frac=0.9, dynamic_range=50, pcTape_rec=False):
+        self.file_path = file_path
+        self.file_name = file_path.split('/')[-1]
+        self.freq_resolution = f_resolution  # in Hz
+        self.overlap_frac = overlap_frac
+        self.dynamic_range = dynamic_range  # in dB
+        self.pcTape_rec = pcTape_rec
 
-    comp_max_freq = 240000  # I guess this is the maximal frequency we want to see in the plot [in Hz]
-    comp_min_freq = 0  # I guess this is the maximal frequency we want to see in the plot [in Hz]
-    spectra = a[0]
-    spec_freqs = a[1]
-    spec_times = a[2]
+        # Flow control booleans
+        self.data_loaded = False
+        self.spectogram_computed = False
 
-    start_idx = 0
-    tmp_times = spec_times - ((nfft / samplerate) / 2) + (start_idx / samplerate)
-    # if nffts_per_psd == 1:
-    #     tmp_times = spec_times - ((nfft / samplerate) / 2) + (start_idx / samplerate)
-    # else:
-    #     tmp_times = spec_times[:-(nffts_per_psd - 1)] - ((nfft / samplerate) / 2) + (start_idx / samplerate)
+    def load_data(self):
+        dat, sr, u = load_data(self.file_path)
+        self.recording_trace = dat.squeeze()
 
-    # etxtract reduced spectrum for plot
-    plot_freqs = spec_freqs[spec_freqs < comp_max_freq]
-    plot_spectra = spectra[spec_freqs < comp_max_freq]
+        if self.pcTape_rec:  # This fixes PC-Tape's bug that writes 1/10 of the samplingrate in the header of the .wav file
+            self.sampling_rate = sr * 10.
+        else:
+            self.sampling_rate = sr
 
-    fig_xspan = 20.
-    fig_yspan = 12.
-    fig_dpi = 80.
-    no_x = fig_xspan * fig_dpi
-    no_y = fig_yspan * fig_dpi
+        self.data_loaded = True
+        pass
 
-    min_x = start_time
-    max_x = end_time
+    def compute_spectogram(self, plottable=False):
+        if not self.data_loaded:
+            self.load_data()
+        temp_spec, self.f, self.t = spectrogram(self.recording_trace, self.sampling_rate,
+                                                fresolution=self.freq_resolution, overlap_frac=self.overlap_frac)
 
-    min_y = comp_min_freq
-    max_y = comp_max_freq
+        # set dynamic range
+        dec_spec = decibel(temp_spec)
+        ampl_max = np.nanmax(dec_spec)  # define maximum; use nanmax, because decibel function may contain NaN values
+        dec_spec -= ampl_max + 1e-20  # subtract maximum so that the maximum value is set to lim x--> -0
+        dec_spec[dec_spec < -self.dynamic_range] = -self.dynamic_range
 
-    x_borders = np.linspace(min_x, max_x, no_x * 2)
-    y_borders = np.linspace(min_y, max_y, no_y * 2)
-    # checked_xy_borders = False
+        self.spec_mat = dec_spec
 
-    tmp_spectra = np.zeros((len(y_borders) - 1, len(x_borders) - 1))
+        self.spectogram_computed = True
 
-    recreate_matrix = False
-    if (tmp_times[1] - tmp_times[0]) > (x_borders[1] - x_borders[0]):
-        x_borders = np.linspace(min_x, max_x, (max_x - min_x) // (tmp_times[1] - tmp_times[0]) + 1)
-        recreate_matrix = True
-    if (spec_freqs[1] - spec_freqs[0]) > (y_borders[1] - y_borders[0]):
-        recreate_matrix = True
-        y_borders = np.linspace(min_y, max_y, (max_y - min_y) // (spec_freqs[1] - spec_freqs[0]) + 1)
-    if recreate_matrix:
-        tmp_spectra = np.zeros((len(y_borders) - 1, len(x_borders) - 1))
+        if plottable:
+            self.plot_spectogram()
+        pass
 
-    for i in range(len(y_borders) - 1):
-        for j in range(len(x_borders) - 1):
-            if x_borders[j] > tmp_times[-1]:
-                break
-            if x_borders[j + 1] < tmp_times[0]:
-                continue
+    def plot_spectogram(self):
+        if not self.spectogram_computed:
+            self.compute_spectogram()
 
-            t_mask = np.arange(len(tmp_times))[(tmp_times >= x_borders[j]) & (tmp_times < x_borders[j + 1])]
-            f_mask = np.arange(len(plot_spectra))[(plot_freqs >= y_borders[i]) & (plot_freqs < y_borders[i + 1])]
+        inch_factor = 2.54
+        fig, ax = plt.subplots(figsize=(56. / inch_factor, 30. / inch_factor))
+        im = ax.imshow(self.spec_mat, cmap='jet', extent=[self.t[0], self.t[-1], self.f[0], self.f[-1]], aspect='auto',
+                       origin='lower', alpha=0.7)
+        # ToDo: Impossible to update the colorbar ticks for them to be multiples of 10!!!
+        cb_ticks = np.arange(0, self.dynamic_range + 10, 10)
 
-            if len(t_mask) == 0 or len(f_mask) == 0:
-                continue
+        cb = fig.colorbar(im)
 
-            tmp_spectra[i, j] = np.max(plot_spectra[f_mask[:, None], t_mask])
-    return tmp_spectra
+        cb.set_label('dB')
+        ax.set_ylabel('Frequency [Hz]')
+        ax.set_xlabel('Time [sec]')
+
+        plt.show()
+
+        pass
 
 
 if __name__ == '__main__':
@@ -87,31 +84,5 @@ if __name__ == '__main__':
     recording = '../../data/pc-tape_recordings/' \
                 'macaregua__february_2018/natalus_outside_cave/natalusTumidirostris0045.wav'
 
-    d, sr, u = load_data(recording)
-    sr *= 10.  # This fixes PC-Tape's bug that writes 1/10 of the samplingrate in the header of the .wav file
-
-    f_res = 1000.  # in Hz
-    spec, f, t = spectrogram(d.squeeze(), sr, f_res, overlap_frac=0.9)
-
-    # set dynamic range
-    dyn_range = 50  # in dB
-    dec_spec = decibel(spec)
-    ampl_max = np.nanmax(dec_spec)  # define maximum; use nanmax, because decibel function may contain NaN values
-    dec_spec -= ampl_max + 1e-20  # subtract maximum so that the maximum value is set to lim x--> -0
-    dec_spec[dec_spec < -dyn_range] = -dyn_range
-
-    inch_factor = 2.54
-    fig, ax = plt.subplots(figsize=(56./inch_factor, 40./inch_factor))
-    im = ax.imshow(dec_spec, cmap='jet', extent=[t[0], t[-1], f[0], f[-1]], aspect='auto', origin='lower',
-                   alpha=0.7)
-    # in imshow, parameter extent sets the canvas edges!
-
-    # ToDo: Impossible to update the colorbar ticks for them to be multiples of 10!!!
-    cb_ticks = np.arange(0, dyn_range + 10, 10)
-
-    cb = fig.colorbar(im)
-
-    cb.set_label('dB')
-    ax.set_ylabel('Frequency [Hz]')
-    ax.set_xlabel('Time [sec]')
-    plt.show()
+    bat1 = Batspy(recording, pcTape_rec=True)
+    bat1.compute_spectogram(plottable=True)
