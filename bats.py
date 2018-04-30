@@ -74,26 +74,30 @@ class Batspy:
         ax.set_xlabel('Time [sec]')
         pass
 
-    def detect_calls(self, det_range=(110000., 150000.), th_above_dynamic_range=5., freq_ch_th=15):
-
-        # Set detection threshold relative to the dynamic range
-        det_th = -(self.dynamic_range - th_above_dynamic_range)
-
+    def detect_calls(self, det_range=(100000., 150000.), th_above_dynamic_range=1., ch_presence_percentage=0.7):
         # Get the indices of the frequency channels where we want to detect calls
-        # ToDo: This needs to be a Matrix that analyses all channels in not just one time lapse, but rather a time window of considerabe length
         ind = np.where(np.logical_and(self.f > det_range[0], self.f < det_range[1]))[0]
 
+        # Filter the mean noise out (need to use nanmean() and nanmin(), for there might be NaNs in the spectogram)
+        # ToDo: Try a certain percentile instead of the mean! Perhaps I get better results. Visualize mean and percentiles for diff files!
+        mean_noise = np.nanmean(self.spec_mat)
+        nonoise_spec = self.spec_mat + (self.dynamic_range + mean_noise)
+
+        # Set detection threshold relative to the maximum of the noise-filtered spectogram
+        det_th = np.nanmin(nonoise_spec) + th_above_dynamic_range
+
         # Sum detection events across all frequency channels and set a second order filter
-        suma = np.sum(self.spec_mat[ind] >= det_th, axis=0)
-        over_th_ind = np.where(suma > freq_ch_th)[0]
+        suma = np.sum(nonoise_spec[ind] >= det_th, axis=0)
+        channel_threshold = int(len(ind) * ch_presence_percentage)
+        over_th_ind = np.where(suma > channel_threshold)[0]
 
         # ToDo: Join multiple detection events of each call
 
         # plot call-detection events
         self.plot_spectogram()
         ax = plt.gca()
-        ax.plot(self.t[over_th_ind], np.ones(len(over_th_ind))*det_range[1] + 10000, 'o', ms=20, color='darkred', alpha=.8,
-                mec='k', mew=3)
+        ax.plot(self.t[over_th_ind], np.ones(len(over_th_ind))*det_range[1] + 10000, 'o', ms=20, color='darkred',
+                alpha=.8, mec='k', mew=3)
         pass
 
 
@@ -109,9 +113,9 @@ if __name__ == '__main__':
     bat1.compute_spectogram()
     bat1.detect_calls()
 
-    # bat2 = Batspy(recording1, pcTape_rec=True)
-    # bat2.compute_spectogram()
-    # bat2.detect_calls()
+    bat2 = Batspy(recording2, pcTape_rec=True)
+    bat2.compute_spectogram()
+    bat2.detect_calls()
 
 
     plt.show()
