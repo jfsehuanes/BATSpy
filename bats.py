@@ -16,9 +16,9 @@ class Batspy:
         self.file_path = file_path
         self.file_name = file_path.split('/')[-1]
         self.freq_resolution = f_resolution  # in Hz
-        self.overlap_frac = overlap_frac
+        self.overlap_frac = overlap_frac  # Overlap fraction of the NFFT windows
         self.dynamic_range = dynamic_range  # in dB
-        self.pcTape_rec = pcTape_rec
+        self.pcTape_rec = pcTape_rec  # Was this file recorded by PC-Tape?
 
         # Flow control booleans
         self.data_loaded = False
@@ -72,17 +72,47 @@ class Batspy:
         cb.set_label('dB')
         ax.set_ylabel('Frequency [Hz]')
         ax.set_xlabel('Time [sec]')
+        pass
 
-        plt.show()
+    def detect_calls(self, det_range=(110000., 150000.), th_above_dynamic_range=5., freq_ch_th=15):
 
+        # Set detection threshold relative to the dynamic range
+        det_th = -(self.dynamic_range - th_above_dynamic_range)
+
+        # Get the indices of the frequency channels where we want to detect calls
+        # ToDo: This needs to be a Matrix that analyses all channels in not just one time lapse, but rather a time window of considerabe length
+        ind = np.where(np.logical_and(self.f > det_range[0], self.f < det_range[1]))[0]
+
+        # Sum detection events across all frequency channels and set a second order filter
+        suma = np.sum(self.spec_mat[ind] >= det_th, axis=0)
+        over_th_ind = np.where(suma > freq_ch_th)[0]
+
+        # ToDo: Join multiple detection events of each call
+
+        # plot call-detection events
+        self.plot_spectogram()
+        ax = plt.gca()
+        ax.plot(self.t[over_th_ind], np.ones(len(over_th_ind))*det_range[1] + 10000, 'o', ms=20, color='darkred', alpha=.8,
+                mec='k', mew=3)
         pass
 
 
 if __name__ == '__main__':
 
     # Get the data
-    recording = '../../data/pc-tape_recordings/' \
+    recording1 = '../../data/pc-tape_recordings/' \
+                'macaregua__february_2018/natalus_outside_cave/natalusTumidirostris0024.wav'
+    recording2 = '../../data/pc-tape_recordings/' \
                 'macaregua__february_2018/natalus_outside_cave/natalusTumidirostris0045.wav'
 
-    bat1 = Batspy(recording, pcTape_rec=True)
-    bat1.compute_spectogram(plottable=True)
+    bat1 = Batspy(recording1, pcTape_rec=True)
+    bat1.compute_spectogram()
+    bat1.detect_calls()
+
+    # bat2 = Batspy(recording1, pcTape_rec=True)
+    # bat2.compute_spectogram()
+    # bat2.detect_calls()
+
+
+    plt.show()
+    quit()
