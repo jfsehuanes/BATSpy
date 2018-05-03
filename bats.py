@@ -106,14 +106,14 @@ if __name__ == '__main__':
     # Get the data
     recording1 = '../../data/pc-tape_recordings/' \
                 'macaregua__february_2018/natalus_outside_cave/natalusTumidirostris0024.wav'
-    recording2 = '../../data/pc-tape_recordings/' \
-                'macaregua__february_2018/natalus_outside_cave/natalusTumidirostris0045.wav'
+    recording2 = 'test_result/natalusTumidirostris0045_fix.wav'
+    recording3 = '../../data/diana/0409 Tyroptera tricolor0061 + mit isolation call.wav'
 
     bat1 = Batspy(recording1, pcTape_rec=True)
     bat1.compute_spectogram()
     bat1.detect_calls()
 
-    bat2 = Batspy(recording2, pcTape_rec=True)
+    bat2 = Batspy(recording2, pcTape_rec=False)
     bat2.compute_spectogram()
     bat2.detect_calls()
 
