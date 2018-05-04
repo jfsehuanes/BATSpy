@@ -104,10 +104,10 @@ class Batspy:
 if __name__ == '__main__':
 
     # Get the data
-    recording1 = '../../data/pc-tape_recordings/' \
-                'macaregua__february_2018/natalus_outside_cave/natalusTumidirostris0024.wav'
+    recording1 = 'test_data/natalusTumidirostris0024.wav'
     recording2 = 'test_result/natalusTumidirostris0045_fix.wav'
     recording3 = '../../data/diana/0409 Tyroptera tricolor0061 + mit isolation call.wav'
+    stimulus = 'test_result/stim.wav'
 
     bat1 = Batspy(recording1, pcTape_rec=True)
     bat1.compute_spectogram()
@@ -116,6 +116,10 @@ if __name__ == '__main__':
     bat2 = Batspy(recording2, pcTape_rec=False)
     bat2.compute_spectogram()
     bat2.detect_calls()
+
+    stim = Batspy(stimulus, pcTape_rec=False)
+    stim.compute_spectogram()
+    stim.detect_calls()
 
 
     plt.show()
