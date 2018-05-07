@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 
 from dataloader import load_data
 from powerspectrum import spectrogram, decibel
+from peakdetection import detect_peaks
 
 from IPython import embed
 
@@ -23,6 +24,7 @@ class Batspy:
         # Flow control booleans
         self.data_loaded = False
         self.spectogram_computed = False
+        self.spectogram_plotted = False
 
     def load_data(self):
         dat, sr, u = load_data(self.file_path)
@@ -36,7 +38,7 @@ class Batspy:
         self.data_loaded = True
         pass
 
-    def compute_spectogram(self, plottable=False):
+    def compute_spectogram(self, plotit=False):
         if not self.data_loaded:
             self.load_data()
         temp_spec, self.f, self.t = spectrogram(self.recording_trace, self.sampling_rate,
@@ -52,11 +54,11 @@ class Batspy:
 
         self.spectogram_computed = True
 
-        if plottable:
+        if plotit:
             self.plot_spectogram()
         pass
 
-    def plot_spectogram(self):
+    def plot_spectogram(self, ret_fig_and_ax=False):
         if not self.spectogram_computed:
             self.compute_spectogram()
 
@@ -72,9 +74,15 @@ class Batspy:
         cb.set_label('dB')
         ax.set_ylabel('Frequency [Hz]')
         ax.set_xlabel('Time [sec]')
-        pass
+        self.spectogram_plotted = True
 
-    def detect_calls(self, det_range=(100000., 150000.), th_above_dynamic_range=1., ch_presence_percentage=0.7):
+        if ret_fig_and_ax:
+            return fig, ax
+        else:
+            pass
+
+    def detect_calls(self, det_range=(100000., 150000.), pk_th_perc=97.5, plot_debug=False,
+                     plot_in_spec=False, save_spec_w_calls=False):
         # Get the indices of the frequency channels where we want to detect calls
         ind = np.where(np.logical_and(self.f > det_range[0], self.f < det_range[1]))[0]
 
@@ -83,21 +91,23 @@ class Batspy:
         mean_noise = np.nanmean(self.spec_mat)
         nonoise_spec = self.spec_mat + (self.dynamic_range + mean_noise)
 
-        # Set detection threshold relative to the maximum of the noise-filtered spectogram
-        det_th = np.nanmin(nonoise_spec) + th_above_dynamic_range
+        # Sum over all frequency-channels of interest and set a peak detector
+        temp_s = np.sum(nonoise_spec[ind], axis=0)
+        s = temp_s - np.min(temp_s)
+        th = np.percentile(s, pk_th_perc)
+        peaks, throughs = detect_peaks(s, th, time=self.t)
 
-        # Sum detection events across all frequency channels and set a second order filter
-        suma = np.sum(nonoise_spec[ind] >= det_th, axis=0)
-        channel_threshold = int(len(ind) * ch_presence_percentage)
-        over_th_ind = np.where(suma > channel_threshold)[0]
+        if plot_debug:
+            fig, ax = plt.subplots()
+            ax.plot(self.t, s)
+            ax.plot(peaks, np.ones(len(peaks)) * np.max(s), 'o', ms=20, color='darkred', alpha=.8, mec='k', mew=3)
 
-        # ToDo: Join multiple detection events of each call
-
-        # plot call-detection events
-        self.plot_spectogram()
-        ax = plt.gca()
-        ax.plot(self.t[over_th_ind], np.ones(len(over_th_ind))*det_range[1] + 10000, 'o', ms=20, color='darkred',
-                alpha=.8, mec='k', mew=3)
+        if plot_in_spec:
+            spec_fig, spec_ax = self.plot_spectogram(ret_fig_and_ax=True)
+            spec_ax.plot(peaks, np.ones(len(peaks))*det_range[1] + 10000, 'o', ms=20, color='darkred',
+                         alpha=.8, mec='k', mew=3)
+            if save_spec_w_calls:
+                spec_fig.savefig('test_result/detected_calls/' + self.file_name.split('.')[0] + '.pdf')
         pass
 
 
@@ -111,16 +121,16 @@ if __name__ == '__main__':
 
     bat1 = Batspy(recording1, pcTape_rec=True)
     bat1.compute_spectogram()
-    bat1.detect_calls()
+    bat1.detect_calls(plot_in_spec=True, save_spec_w_calls=True)
 
-    bat2 = Batspy(recording2, pcTape_rec=False)
-    bat2.compute_spectogram()
-    bat2.detect_calls()
-
-    stim = Batspy(stimulus, pcTape_rec=False)
-    stim.compute_spectogram()
-    stim.detect_calls()
-
-
-    plt.show()
-    quit()
+    # bat2 = Batspy(recording2, pcTape_rec=False)
+    # bat2.compute_spectogram()
+    # bat2.detect_calls(plot_debug=True, plot_in_spec=True)
+    #
+    # stim = Batspy(stimulus, pcTape_rec=False)
+    # stim.compute_spectogram()
+    # stim.detect_calls()
+    #
+    #
+    # plt.show()
+    # quit()
