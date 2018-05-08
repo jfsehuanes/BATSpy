@@ -3,8 +3,6 @@ from scipy.io.wavfile import write
 
 from dataloader import load_data
 
-from IPython import embed
-
 if __name__ == '__main__':
 
     if len(sys.argv) <= 2:
