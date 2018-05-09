@@ -50,6 +50,10 @@ class Batspy:
         dec_spec -= ampl_max + 1e-20  # subtract maximum so that the maximum value is set to lim x--> -0
         dec_spec[dec_spec < -self.dynamic_range] = -self.dynamic_range
 
+        # Fix NaNs issue
+        if True in np.isnan(dec_spec):
+            dec_spec[np.isnan(dec_spec)] = - self.dynamic_range
+
         self.spec_mat = dec_spec
 
         self.spectogram_computed = True
@@ -81,8 +85,12 @@ class Batspy:
         else:
             pass
 
-    def detect_calls(self, det_range=(100000., 150000.), pk_th_perc=97.5, plot_debug=False,
+    def detect_calls(self, det_range=(100000., 180000.), d_range_det_th=0.1, plot_debug=False,
                      plot_in_spec=False, save_spec_w_calls=False):
+
+        if d_range_det_th > 1. or d_range_det_th < 0.:
+            raise(ValueError("The detection threshould should be between 0 and 1"))
+
         # Get the indices of the frequency channels where we want to detect calls
         ind = np.where(np.logical_and(self.f > det_range[0], self.f < det_range[1]))[0]
 
@@ -92,20 +100,23 @@ class Batspy:
         nonoise_spec = self.spec_mat + (self.dynamic_range + mean_noise)
 
         # Sum over all frequency-channels of interest and set a peak detector
-        temp_s = np.sum(nonoise_spec[ind], axis=0)
+        temp_s = np.sum(nonoise_spec[ind], axis=0) / float(len(nonoise_spec[ind]))
         s = temp_s - np.min(temp_s)
-        th = np.percentile(s, pk_th_perc)
+        th = self.dynamic_range * d_range_det_th
         peaks, throughs = detect_peaks(s, th, time=self.t)
 
         if plot_debug:
             fig, ax = plt.subplots()
             ax.plot(self.t, s)
             ax.plot(peaks, np.ones(len(peaks)) * np.max(s), 'o', ms=20, color='darkred', alpha=.8, mec='k', mew=3)
+            ax.plot([self.t[0], self.t[-1]], [th, th], '--k', lw=2.5)
+            # plt.show()
 
         if plot_in_spec:
             spec_fig, spec_ax = self.plot_spectogram(ret_fig_and_ax=True)
             spec_ax.plot(peaks, np.ones(len(peaks))*det_range[1] + 10000, 'o', ms=20, color='darkred',
                          alpha=.8, mec='k', mew=3)
+            spec_fig.suptitle(self.file_name.split('.')[0])
             if save_spec_w_calls:
                 spec_fig.savefig('test_result/detected_calls/' + self.file_name.split('.')[0] + '.pdf')
         pass
@@ -113,15 +124,27 @@ class Batspy:
 
 if __name__ == '__main__':
 
-    # Get the data
-    recording1 = 'test_data/natalusTumidirostris0024.wav'
-    recording2 = 'test_result/natalusTumidirostris0045_fix.wav'
-    recording3 = '../../data/diana/0409 Tyroptera tricolor0061 + mit isolation call.wav'
-    stimulus = 'test_result/stim.wav'
+    import glob
+    wavefiles = np.sort(glob.glob('test_result/fixed_files/*.wav'))
 
-    bat1 = Batspy(recording1, pcTape_rec=True)
-    bat1.compute_spectogram()
-    bat1.detect_calls(plot_in_spec=True, save_spec_w_calls=True)
+    for e, wf in enumerate(wavefiles):
+        print("\nAnalyzing file %i from %i\n" % (e+1, len(wavefiles)))
+        bat = Batspy(wf, dynamic_range=70)
+        bat.compute_spectogram()
+        bat.detect_calls(plot_debug=True)
+
+    plt.show()
+    quit()
+
+    # # Get the data
+    # recording1 = 'test_data/natalusTumidirostris0024.wav'
+    # recording2 = 'test_result/natalusTumidirostris0045_fix.wav'
+    # recording3 = '../../data/diana/0409 Tyroptera tricolor0061 + mit isolation call.wav'
+    # stimulus = 'test_result/stim.wav'
+    #
+    # bat1 = Batspy(recording1, pcTape_rec=True)
+    # bat1.compute_spectogram()
+    # bat1.detect_calls(plot_in_spec=True, save_spec_w_calls=True)
 
     # bat2 = Batspy(recording2, pcTape_rec=False)
     # bat2.compute_spectogram()
