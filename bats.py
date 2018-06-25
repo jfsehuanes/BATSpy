@@ -125,7 +125,7 @@ class Batspy:
 if __name__ == '__main__':
 
     import glob
-    wavefiles = np.sort(glob.glob('test_result/fixed_files/*.wav'))
+    wavefiles = np.sort(glob.glob('../../data/fixed_files/*.wav'))
 
     for e, wf in enumerate(wavefiles):
         print("\nAnalyzing file %i from %i\n" % (e+1, len(wavefiles)))
@@ -133,7 +133,7 @@ if __name__ == '__main__':
         bat.compute_spectogram()
         bat.detect_calls(plot_debug=True)
 
-    plt.show()
+        plt.show()
     quit()
 
     # # Get the data
