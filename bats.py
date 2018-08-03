@@ -13,13 +13,15 @@ from IPython import embed
 
 class Batspy:
 
-    def __init__(self, file_path, f_resolution=1024., overlap_frac=0.8, dynamic_range=90, pcTape_rec=False):
+    def __init__(self, file_path, f_resolution=1024., overlap_frac=0.8, dynamic_range=90, pcTape_rec=False,
+                 multiCH=False):
         self.file_path = file_path
         self.file_name = file_path.split('/')[-1]
         self.freq_resolution = f_resolution  # in Hz
         self.overlap_frac = overlap_frac  # Overlap fraction of the NFFT windows
         self.dynamic_range = dynamic_range  # in dB
         self.pcTape_rec = pcTape_rec  # Was this file recorded by PC-Tape?
+        self.multiCH = multiCH  # Does this file was recorded with other channels simultaneously?
 
         # Flow control booleans
         self.data_loaded = False
@@ -67,6 +69,7 @@ class Batspy:
             self.compute_spectogram()
 
         inch_factor = 2.54
+        fs = 14
         fig, ax = plt.subplots(figsize=(56. / inch_factor, 30. / inch_factor))
         im = ax.imshow(self.spec_mat, cmap='jet', extent=[self.t[0], self.t[-1], self.f[0], self.f[-1]], aspect='auto',
                        origin='lower', alpha=0.7)
@@ -75,9 +78,9 @@ class Batspy:
 
         cb = fig.colorbar(im)
 
-        cb.set_label('dB')
-        ax.set_ylabel('Frequency [Hz]')
-        ax.set_xlabel('Time [sec]')
+        cb.set_label('dB', fontsize=fs)
+        ax.set_ylabel('Frequency [Hz]', fontsize=fs)
+        ax.set_xlabel('Time [sec]', fontsize=fs)
         self.spectogram_plotted = True
 
         if ret_fig_and_ax:
@@ -126,17 +129,30 @@ if __name__ == '__main__':
 
     import sys
 
-    if len(sys.argv) != 2:
-        print("ERROR\nPlease tell me the FilePath of the recording you wish to analyze.")
+    if len(sys.argv) != 3:
+        print("ERROR\nPlease tell me the FilePath of the recording you wish to analyze as 1st argument and if it is"
+              " a single recording ('s') or part of a multi-channel ('m') recording as second argument")
         quit()
 
-    recording = sys.argv[-1]
+    recording = sys.argv[1]
+    rec_type = sys.argv[2]
 
-    bat = Batspy(recording, f_resolution= 256., dynamic_range=70)
-    bat.compute_spectogram()
-    bat.detect_calls(plot_in_spec=True)
-    plt.show()
-    quit()
+    # Analyze MultiChannel
+    if rec_type == 'm':
+        from multiCH import get_all_ch
+        
+        all_recs = get_all_ch(recording)
+
+        for rec in all_recs:
+            bat = Batspy(rec, f_resolution= 256., dynamic_range=70)
+
+    elif rec_type == 's':
+        
+        bat = Batspy(recording, f_resolution= 256., dynamic_range=70)
+        bat.compute_spectogram()
+        bat.detect_calls(plot_in_spec=True)
+        plt.show()
+        quit()
     
 
     # import glob
