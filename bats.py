@@ -13,7 +13,7 @@ from IPython import embed
 
 class Batspy:
 
-    def __init__(self, file_path, f_resolution=1000., overlap_frac=0.9, dynamic_range=50, pcTape_rec=False):
+    def __init__(self, file_path, f_resolution=1024., overlap_frac=0.8, dynamic_range=90, pcTape_rec=False):
         self.file_path = file_path
         self.file_name = file_path.split('/')[-1]
         self.freq_resolution = f_resolution  # in Hz
@@ -124,17 +124,32 @@ class Batspy:
 
 if __name__ == '__main__':
 
-    import glob
-    wavefiles = np.sort(glob.glob('../../data/fixed_files/*.wav'))
+    import sys
 
-    for e, wf in enumerate(wavefiles):
-        print("\nAnalyzing file %i from %i\n" % (e+1, len(wavefiles)))
-        bat = Batspy(wf, dynamic_range=70)
-        bat.compute_spectogram()
-        bat.detect_calls(plot_debug=True)
+    if len(sys.argv) != 2:
+        print("ERROR\nPlease tell me the FilePath of the recording you wish to analyze.")
+        quit()
 
-        plt.show()
+    recording = sys.argv[-1]
+
+    bat = Batspy(recording, f_resolution= 256., dynamic_range=70)
+    bat.compute_spectogram()
+    bat.detect_calls(plot_in_spec=True)
+    plt.show()
     quit()
+    
+
+    # import glob
+    # wavefiles = np.sort(glob.glob('../../data/fixed_files/*.wav'))
+
+    # for e, wf in enumerate(wavefiles):
+    #     print("\nAnalyzing file %i from %i\n" % (e+1, len(wavefiles)))
+    #     bat = Batspy(wf, dynamic_range=70)
+    #     bat.compute_spectogram()
+    #     bat.detect_calls(plot_debug=True)
+
+    #     plt.show()
+    # quit()
 
     # # Get the data
     # recording1 = 'test_data/natalusTumidirostris0024.wav'
