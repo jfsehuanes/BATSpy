@@ -165,7 +165,7 @@ def relacs_files(filepathes, channel):
 
     Raises
     ------
-    ValueError: 'invalid name of relacs trace file
+    ValueError: invalid name of relacs trace file
     """
     
     if type(filepathes) is not list:
@@ -486,7 +486,7 @@ def load_fishgrid(filepathes, channel=-1, verbose=0):
     filepathes: string or list of string
         path to a fishgrid data directory, a fishgrid.cfg file,
         or fidhgrid traces-grid*.raw files.
-    channel: int
+     channel: int
         The data channel. If negative all channels are selected.
     verbose: int
         if > 0 show detailed error/warning messages
@@ -1020,10 +1020,7 @@ open_data = DataLoader
 
 if __name__ == "__main__":
     import sys
-    try:
-        import matplotlib.pyplot as plt
-    except ImportError:
-        pass
+    import matplotlib.pyplot as plt
 
     print("Checking dataloader module ...")
     print('')

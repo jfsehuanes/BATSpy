@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 
 from dataloader import load_data
 from powerspectrum import spectrogram, decibel
-from peakdetection import detect_peaks
+from eventdetection import detect_peaks
 
 from IPython import embed
 
@@ -106,18 +106,18 @@ class Batspy:
         temp_s = np.sum(nonoise_spec[ind], axis=0) / float(len(nonoise_spec[ind]))
         s = temp_s - np.min(temp_s)
         th = self.dynamic_range * d_range_det_th
-        peaks, throughs = detect_peaks(s, th, time=self.t)
+        peaks, throughs = detect_peaks(s, th)
 
         if plot_debug:
             fig, ax = plt.subplots()
             ax.plot(self.t, s)
-            ax.plot(peaks, np.ones(len(peaks)) * np.max(s), 'o', ms=20, color='darkred', alpha=.8, mec='k', mew=3)
+            ax.plot(self.t[peaks], np.ones(len(peaks)) * np.max(s), 'o', ms=20, color='darkred', alpha=.8, mec='k', mew=3)
             ax.plot([self.t[0], self.t[-1]], [th, th], '--k', lw=2.5)
             # plt.show()
 
         if plot_in_spec:
             spec_fig, spec_ax = self.plot_spectogram(ret_fig_and_ax=True)
-            spec_ax.plot(peaks, np.ones(len(peaks))*det_range[1] + 10000, 'o', ms=20, color='darkred',
+            spec_ax.plot(self.t[peaks], np.ones(len(peaks))*det_range[1] + 10000, 'o', ms=20, color='darkred',
                          alpha=.8, mec='k', mew=3)
             spec_fig.suptitle(self.file_name.split('.')[0])
             if save_spec_w_calls:
