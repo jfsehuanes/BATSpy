@@ -4,9 +4,9 @@ warnings.filterwarnings("ignore", category=RuntimeWarning)
 import numpy as np
 import matplotlib.pyplot as plt
 
-from dataloader import load_data
-from powerspectrum import spectrogram, decibel
-from eventdetection import detect_peaks
+from thunderfish.dataloader import load_data
+from thunderfish.powerspectrum import spectrogram, decibel
+from thunderfish.eventdetection import detect_peaks
 
 from IPython import embed
 
