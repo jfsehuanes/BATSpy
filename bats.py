@@ -13,7 +13,7 @@ from IPython import embed
 
 class Batspy:
 
-    def __init__(self, file_path, f_resolution=1024., overlap_frac=0.8, dynamic_range=90, pcTape_rec=False,
+    def __init__(self, file_path, f_resolution=1024., overlap_frac=0.68, dynamic_range=90, pcTape_rec=False,
                  multiCH=False):
         self.file_path = file_path
         self.file_name = file_path.split('/')[-1]
@@ -25,8 +25,8 @@ class Batspy:
 
         # Flow control booleans
         self.data_loaded = False
-        self.spectogram_computed = False
-        self.spectogram_plotted = False
+        self.spectrogram_computed = False
+        self.spectrogram_plotted = False
 
     def load_data(self):
         dat, sr, u = load_data(self.file_path)
@@ -40,14 +40,14 @@ class Batspy:
         self.data_loaded = True
         pass
 
-    def compute_spectogram(self, plotit=False):
+    def compute_spectrogram(self, plotit=False):
         if not self.data_loaded:
             self.load_data()
-        temp_spec, self.f, self.t = spectrogram(self.recording_trace, self.sampling_rate,
+        self.spec_mat, self.f, self.t = spectrogram(self.recording_trace, self.sampling_rate,
                                                 fresolution=self.freq_resolution, overlap_frac=self.overlap_frac)
 
         # set dynamic range
-        dec_spec = decibel(temp_spec)
+        dec_spec = decibel(self.spec_mat)
         ampl_max = np.nanmax(dec_spec)  # define maximum; use nanmax, because decibel function may contain NaN values
         dec_spec -= ampl_max + 1e-20  # subtract maximum so that the maximum value is set to lim x--> -0
         dec_spec[dec_spec < -self.dynamic_range] = -self.dynamic_range
@@ -56,22 +56,22 @@ class Batspy:
         if True in np.isnan(dec_spec):
             dec_spec[np.isnan(dec_spec)] = - self.dynamic_range
 
-        self.spec_mat = dec_spec
+        self.plt_spec = dec_spec
 
-        self.spectogram_computed = True
+        self.spectrogram_computed = True
 
         if plotit:
-            self.plot_spectogram()
+            self.plot_spectrogram()
         pass
 
-    def plot_spectogram(self, ret_fig_and_ax=False):
-        if not self.spectogram_computed:
-            self.compute_spectogram()
+    def plot_spectrogram(self, ret_fig_and_ax=False):
+        if not self.spectrogram_computed:
+            self.compute_spectrogram()
 
         inch_factor = 2.54
         fs = 14
         fig, ax = plt.subplots(figsize=(56. / inch_factor, 30. / inch_factor))
-        im = ax.imshow(self.spec_mat, cmap='jet', extent=[self.t[0], self.t[-1], self.f[0], self.f[-1]], aspect='auto',
+        im = ax.imshow(self.plt_spec, cmap='jet', extent=[self.t[0], self.t[-1], self.f[0], self.f[-1]], aspect='auto',
                        origin='lower', alpha=0.7)
         # ToDo: Impossible to update the colorbar ticks for them to be multiples of 10!!!
         cb_ticks = np.arange(0, self.dynamic_range + 10, 10)
@@ -81,42 +81,72 @@ class Batspy:
         cb.set_label('dB', fontsize=fs)
         ax.set_ylabel('Frequency [Hz]', fontsize=fs)
         ax.set_xlabel('Time [sec]', fontsize=fs)
-        self.spectogram_plotted = True
+        self.spectrogram_plotted = True
 
         if ret_fig_and_ax:
             return fig, ax
         else:
             pass
 
-    def detect_calls(self, det_range=(100000., 180000.), d_range_det_th=0.1, plot_debug=False,
+    def detect_calls(self, det_range=(95000., 180000.), d_range_det_th=0.1, plot_debug=False,
                      plot_in_spec=False, save_spec_w_calls=False):
 
         if d_range_det_th > 1. or d_range_det_th < 0.:
-            raise(ValueError("The detection threshould should be between 0 and 1"))
+            raise(ValueError("The detection threshold should be between 0 and 1"))
 
-        # Get the indices of the frequency channels where we want to detect calls
-        ind = np.where(np.logical_and(self.f > det_range[0], self.f < det_range[1]))[0]
+        # SET A PROPER THRESHOLD
 
-        # Filter the mean noise out (need to use nanmean() and nanmin(), for there might be NaNs in the spectogram)
-        # ToDo: Try a certain percentile instead of the mean! Perhaps I get better results. Visualize mean and percentiles for diff files!
-        mean_noise = np.nanmean(self.spec_mat)
-        nonoise_spec = self.spec_mat + (self.dynamic_range + mean_noise)
+        # Get an average over all frequency channels within detection range
+        av_power = np.mean(self.spec_mat[np.logical_and(self.f > det_range[0], self.f < det_range[1])], axis=0)
 
-        # Sum over all frequency-channels of interest and set a peak detector
-        temp_s = np.sum(nonoise_spec[ind], axis=0) / float(len(nonoise_spec[ind]))
-        s = temp_s - np.min(temp_s)
-        th = self.dynamic_range * d_range_det_th
-        peaks, throughs = detect_peaks(s, th)
+        # embed()
+        # quit()
+
+        h, b = np.histogram(av_power, bins=np.linspace(0.0, np.max(av_power), 1000))
+        h = h[2:]
+        b = b[2:]
+        mini = np.nonzero(h > 0)[0][0]
+        maxi = np.argmax(h)+1
+        w = maxi - mini
+        maxi = maxi + w
+        if maxi >= len(b):
+            maxi = len(b) - 1
+        noise_gaus = av_power[av_power < b[maxi]]
+        mean = np.mean(noise_gaus)
+        std = np.std(noise_gaus)
+
+        upper = av_power[av_power > mean + 3.0 * std]
+        uppermean = np.mean(upper)
+
+        # Define the threshold
+        if uppermean > mean + 6.0*std:
+            th = 0.5*(mean + uppermean)
+            # th = self.dynamic_range * d_range_det_th
+        else:
+            th = self.dynamic_range * d_range_det_th
+            pass  # ToDo: this case means there are most likely no calls to detect!
+
+        # Just plot where the threshold is set in the histogram and see what's happening!
+        # embed()
+        # quit()
+        # plt.bar(h, b[:-1])
+        # ylims = plt.gca().get_ylim()
+        # plt.plot([th, th], [ylims[0], ylims[1]], '--k')
+
+        th = np.min(av_power)  # THIS THRESHOLD ROCKS YOUR PANTS! for more detections, increase f_res. 2^7 or 2^8
+
+        peaks, throughs = detect_peaks(av_power, np.min(av_power))
 
         if plot_debug:
             fig, ax = plt.subplots()
-            ax.plot(self.t, s)
-            ax.plot(self.t[peaks], np.ones(len(peaks)) * np.max(s), 'o', ms=20, color='darkred', alpha=.8, mec='k', mew=3)
+            ax.plot(self.t, av_power)
+            ax.plot(self.t[peaks], np.ones(len(peaks)) * np.max(av_power), 'o', ms=20, color='darkred', alpha=.8,
+                    mec='k', mew=3)
             ax.plot([self.t[0], self.t[-1]], [th, th], '--k', lw=2.5)
             # plt.show()
 
         if plot_in_spec:
-            spec_fig, spec_ax = self.plot_spectogram(ret_fig_and_ax=True)
+            spec_fig, spec_ax = self.plot_spectrogram(ret_fig_and_ax=True)
             spec_ax.plot(self.t[peaks], np.ones(len(peaks))*det_range[1] + 10000, 'o', ms=20, color='darkred',
                          alpha=.8, mec='k', mew=3)
             spec_fig.suptitle(self.file_name.split('.')[0])
@@ -144,12 +174,12 @@ if __name__ == '__main__':
         all_recs = get_all_ch(recording)
 
         for rec in all_recs:
-            bat = Batspy(rec, f_resolution= 256., dynamic_range=70)
+            bat = Batspy(rec, f_resolution=128., dynamic_range=70)
 
     elif rec_type == 's':
         
-        bat = Batspy(recording, f_resolution= 256., dynamic_range=70)
-        bat.compute_spectogram()
+        bat = Batspy(recording, f_resolution=float(2**8), dynamic_range=70)  # 2^7 = 128
+        bat.compute_spectrogram()
         bat.detect_calls(plot_in_spec=True)
         plt.show()
         quit()
