@@ -6,14 +6,14 @@ import matplotlib.pyplot as plt
 
 from thunderfish.dataloader import load_data
 from thunderfish.powerspectrum import spectrogram, decibel
-from thunderfish.eventdetection import detect_peaks
+from thunderfish.eventdetection import detect_peaks, threshold_crossings
 
 from IPython import embed
 
 
 class Batspy:
 
-    def __init__(self, file_path, f_resolution=1024., overlap_frac=0.68, dynamic_range=90, pcTape_rec=False,
+    def __init__(self, file_path, f_resolution=2**7, overlap_frac=0.64, dynamic_range=90, pcTape_rec=False,
                  multiCH=False):
         self.file_path = file_path
         self.file_name = file_path.split('/')[-1]
@@ -98,44 +98,14 @@ class Batspy:
 
         # Get an average over all frequency channels within detection range
         av_power = np.mean(self.spec_mat[np.logical_and(self.f > det_range[0], self.f < det_range[1])], axis=0)
-
-        # embed()
-        # quit()
-
-        h, b = np.histogram(av_power, bins=np.linspace(0.0, np.max(av_power), 1000))
-        h = h[2:]
-        b = b[2:]
-        mini = np.nonzero(h > 0)[0][0]
-        maxi = np.argmax(h)+1
-        w = maxi - mini
-        maxi = maxi + w
-        if maxi >= len(b):
-            maxi = len(b) - 1
-        noise_gaus = av_power[av_power < b[maxi]]
-        mean = np.mean(noise_gaus)
-        std = np.std(noise_gaus)
-
-        upper = av_power[av_power > mean + 3.0 * std]
-        uppermean = np.mean(upper)
-
-        # Define the threshold
-        if uppermean > mean + 6.0*std:
-            th = 0.5*(mean + uppermean)
-            # th = self.dynamic_range * d_range_det_th
-        else:
-            th = self.dynamic_range * d_range_det_th
-            pass  # ToDo: this case means there are most likely no calls to detect!
-
-        # Just plot where the threshold is set in the histogram and see what's happening!
-        # embed()
-        # quit()
-        # plt.bar(h, b[:-1])
-        # ylims = plt.gca().get_ylim()
-        # plt.plot([th, th], [ylims[0], ylims[1]], '--k')
-
         th = np.min(av_power)  # THIS THRESHOLD ROCKS YOUR PANTS! for more detections, increase f_res. 2^7 or 2^8
+        peaks, throughs = detect_peaks(av_power, th)
 
-        peaks, throughs = detect_peaks(av_power, np.min(av_power))
+        # Get the threshold crossings to determine call duration
+        # abv_th, bel_th = threshold_crossings(av_power, th)
+        # embed()
+        # quit()
+
 
         if plot_debug:
             fig, ax = plt.subplots()
@@ -174,11 +144,18 @@ if __name__ == '__main__':
         all_recs = get_all_ch(recording)
 
         for rec in all_recs:
-            bat = Batspy(rec, f_resolution=128., dynamic_range=70)
+            bat = Batspy(rec, f_resolution=2**7, dynamic_range=70)
 
     elif rec_type == 's':
+
+        # For Myrna's data
+        # mouse = Batspy(recording, f_resolution=2**6, overlap_frac=0.4)
+        # mouse.compute_spectrogram()
+        # mouse.detect_calls(det_range=(30000., 100000.), plot_debug=True, plot_in_spec=True)
+        # plt.show()
+        # quit()
         
-        bat = Batspy(recording, f_resolution=float(2**8), dynamic_range=70)  # 2^7 = 128
+        bat = Batspy(recording, f_resolution=2**8, overlap_frac=.95, dynamic_range=70, pcTape_rec=False)  # 2^7 = 128
         bat.compute_spectrogram()
         bat.detect_calls(plot_in_spec=True)
         plt.show()
