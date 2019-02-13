@@ -40,7 +40,7 @@ class Batspy:
         self.data_loaded = True
         pass
 
-    def compute_spectrogram(self, plotit=False):
+    def compute_spectrogram(self, plotit=False, ret=False):
         if not self.data_loaded:
             self.load_data()
         self.spec_mat, self.f, self.t = spectrogram(self.recording_trace, self.sampling_rate,
@@ -99,13 +99,11 @@ class Batspy:
         # Get an average over all frequency channels within detection range
         av_power = np.mean(self.spec_mat[np.logical_and(self.f > det_range[0], self.f < det_range[1])], axis=0)
         th = np.min(av_power)  # THIS THRESHOLD ROCKS YOUR PANTS! for more detections, increase f_res. 2^7 or 2^8
-        peaks, throughs = detect_peaks(av_power, th)
 
-        # Get the threshold crossings to determine call duration
-        # abv_th, bel_th = threshold_crossings(av_power, th)
-        # embed()
-        # quit()
-
+        # Fix cases where th <= 0
+        if th <= 0:
+            th = np.mean(av_power)
+        peaks, troughs = detect_peaks(av_power, th)
 
         if plot_debug:
             fig, ax = plt.subplots()
@@ -117,12 +115,13 @@ class Batspy:
 
         if plot_in_spec:
             spec_fig, spec_ax = self.plot_spectrogram(ret_fig_and_ax=True)
-            spec_ax.plot(self.t[peaks], np.ones(len(peaks))*det_range[1] + 10000, 'o', ms=20, color='darkred',
-                         alpha=.8, mec='k', mew=3)
+            spec_ax.plot(self.t[peaks], np.ones(len(peaks))*det_range[1] + (det_range[1]*0.001), 'o', ms=20,
+                         color='darkred', alpha=.8, mec='k', mew=3)
             spec_fig.suptitle(self.file_name.split('.')[0])
             if save_spec_w_calls:
                 spec_fig.savefig('test_result/detected_calls/' + self.file_name.split('.')[0] + '.pdf')
-        pass
+
+        return av_power, peaks, troughs
 
 
 if __name__ == '__main__':
@@ -139,12 +138,34 @@ if __name__ == '__main__':
 
     # Analyze MultiChannel
     if rec_type == 'm':
-        from multiCH import get_all_ch
+        from multiCH import get_all_ch, plot_multiCH_spectrogram
+
+        dyn_range = 70
         
         all_recs = get_all_ch(recording)
+        pk_arrays = []
+        specs = []
 
-        for rec in all_recs:
-            bat = Batspy(rec, f_resolution=2**7, dynamic_range=70)
+        for rec_idx in np.arange(len(all_recs)):
+            print('\nAnalyzing Channel ' + str(rec_idx+1) + ' of ' + str(len(all_recs)) + '...')
+            bat = Batspy(all_recs[rec_idx], f_resolution=2**10, overlap_frac=.70, dynamic_range=dyn_range)
+            bat.compute_spectrogram()
+            specs.append(bat.plt_spec)
+            _, p, _ = bat.detect_calls()
+            pk_arrays.append(p)
+
+        # sum the power-spectra across the detection-channels only and detect peaks
+        # s = np.sum(det_peaks, axis=0)
+        # pk, tr = detect_peaks(s, threshold=np.min(s))
+
+        # plot a spectrogram that includes all channels!
+        av_sp = np.mean(specs, axis=0)
+        plot_multiCH_spectrogram(av_sp, bat.t, bat.f, pk_arrays, dynamic_range=dyn_range)
+
+        plt.show()
+        quit()
+
+
 
     elif rec_type == 's':
 
@@ -155,7 +176,7 @@ if __name__ == '__main__':
         # plt.show()
         # quit()
         
-        bat = Batspy(recording, f_resolution=2**8, overlap_frac=.95, dynamic_range=70, pcTape_rec=False)  # 2^7 = 128
+        bat = Batspy(recording, f_resolution=2**9, overlap_frac=.70, dynamic_range=70)  # 2^7 = 128
         bat.compute_spectrogram()
         bat.detect_calls(plot_in_spec=True)
         plt.show()
