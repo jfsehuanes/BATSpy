@@ -16,12 +16,12 @@ def get_all_ch(single_filename):
     return np.sort(ch_list)
 
 
-def plot_multiCH_spectrogram(spec_mat, time_arr, freq_arr, pk_idxs, dynamic_range=70, ret_fig_and_ax=False):
+def plot_multiCH_spectrogram(spec_4x1, time_arr, freq_arr, pk_idxs, all_ch_peak_times, dynamic_range=70, ret_fig_and_ax=False):
 
     inch_factor = 2.54
     fs = 14
-    fig, ax = plt.subplots(figsize=(56. / inch_factor, 30. / inch_factor))
-    im = ax.imshow(spec_mat, cmap='jet', extent=[time_arr[0], time_arr[-1], freq_arr[0], freq_arr[-1]],
+    fig, ax = plt.subplots(figsize=(50. / inch_factor, 25. / inch_factor))
+    im = ax.imshow(spec_4x1, cmap='jet', extent=[time_arr[0], time_arr[-1], freq_arr[0], freq_arr[-1]],
                    aspect='auto', origin='lower', alpha=0.7)
 
     cb_ticks = np.arange(0, dynamic_range + 10, 10)
@@ -37,5 +37,7 @@ def plot_multiCH_spectrogram(spec_mat, time_arr, freq_arr, pk_idxs, dynamic_rang
     for i in np.arange(len(pk_idxs)):
         ax.plot(time_arr[pk_idxs[i]], np.ones(len(pk_idxs[i])) * 100000 + 2000*i, 'o', ms=20, color=colors[i],
                 alpha=.8, mec='k', mew=3)
+    ax.plot(all_ch_peak_times, np.ones(len(all_ch_peak_times)) * 95000, 'o', ms=20, color='gray',
+            alpha=.8, mec='k', mew=3)
 
     pass
