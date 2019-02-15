@@ -13,7 +13,7 @@ from IPython import embed
 
 class Batspy:
 
-    def __init__(self, file_path, f_resolution=2**7, overlap_frac=0.64, dynamic_range=90, pcTape_rec=False,
+    def __init__(self, file_path, f_resolution=2**9, overlap_frac=0.7, dynamic_range=70, pcTape_rec=False,
                  multiCH=False):
         self.file_path = file_path
         self.file_name = file_path.split('/')[-1]
@@ -88,7 +88,7 @@ class Batspy:
         else:
             pass
 
-    def detect_calls(self, det_range=(95000., 180000.), d_range_det_th=0.1, plot_debug=False,
+    def detect_calls(self, det_range=(40000, 150000), d_range_det_th=0.1, plot_debug=False,
                      plot_in_spec=False, save_spec_w_calls=False):
 
         if d_range_det_th > 1. or d_range_det_th < 0.:
@@ -138,140 +138,32 @@ if __name__ == '__main__':
 
     # Analyze MultiChannel
     if rec_type == 'm':
-        from multiCH import get_all_ch, plot_multiCH_spectrogram
+        from multiCH import get_all_ch, get_calls_across_channels
 
-        dyn_range = 70
-        
+        # Get all the channels corresponding to the input file
         all_recs = get_all_ch(recording)
-        pk_arrays = []
-        specs = []
+        # Get the calls
+        calls = get_calls_across_channels(all_recs, plot_spec=True)
 
-        for rec_idx in np.arange(len(all_recs)):
-            print('\nAnalyzing Channel ' + str(rec_idx+1) + ' of ' + str(len(all_recs)) + '...')
-            bat = Batspy(all_recs[rec_idx], f_resolution=2**9, overlap_frac=.70, dynamic_range=dyn_range)
-            bat.compute_spectrogram()
-            specs.append(bat.plt_spec)
-            _, p, _ = bat.detect_calls()
-            pk_arrays.append(p)
+        # Compute the Pulse-Intervals:
+        diff = np.diff(calls)
+        med = np.median(diff)
 
-        # The problem across channels is that there is a delay in the call from one mike to the other and
-        # this results in double detections which are time-shifted.
-        # Now I need to decide on which channel to stay and make some compromises from there on!
+        # ToDo: Need to put the diff thing in a new function.
+        inch_factor = 2.54
+        fs = 14
+        fig, ax = plt.subplots(figsize=(50. / inch_factor, 25. / inch_factor))
 
-        # make a running average window. The channel that registers higher values within the channel is the
-        # channel to be taken into account.
-
-        av_pow = [np.mean(e, axis=0) for e in specs]
-        norm_pow = [e - np.mean(e) for e in av_pow]
-
-        pow_at_call = [av_pow[e][pk_arrays[e]] for e in np.arange(len(pk_arrays))]
-        time_at_call = [bat.t[pk_arrays[e]] for e in np.arange(len(pk_arrays))]
-        run_wsize = 0.2  # in seconds
-        time_sr = 1./np.diff(bat.t[:2])[0]
-
-        # find window_size in index
-        idx_window_width = int(np.floor(time_sr * run_wsize / 1.))
-        step_size = idx_window_width//4
-        last_idx = len(bat.t) - idx_window_width
-        steps = np.arange(0, last_idx, step_size)
-
-        channel_sequence = np.ones(len(steps))
-        call_times = []
-
-        for enu, step in enumerate(steps):
-
-            # first we need the valid indices for the current window (for all channels, i.e shape=(n,4))
-            win_peak_idxs = [pk_arrays[e][np.logical_and(pk_arrays[e] > step,
-                                                         pk_arrays[e] < step + idx_window_width)]
-                             for e in np.arange(len(pk_arrays))]
-
-            if np.sum(np.concatenate(win_peak_idxs)) == 0:
-                # This is the case when there are no detections within the window
-                channel_sequence[enu] = np.nan
-                continue
-
-            else:
-                # now we look for the power within de valid peaks for each channel.
-                # Then the channel with the highest mean is chosen. This is achieved with nanargmax,
-                # which output ranges from 0 - #_of_ch (i.e. the channels)
-                channel_w_highest_pow = np.nanargmax([np.mean(norm_pow[e][win_peak_idxs[e]])
-                                                      for e in np.arange(len(norm_pow))])
-                channel_sequence[enu] = channel_w_highest_pow
-                call_times.append(bat.t[win_peak_idxs[channel_w_highest_pow]])
-
-        # Now there are double detections for the same call when transitioning from one channel to the other.
-        # For this I need to make an average of the time call for the case with double detections.
-        call_times = np.unique(np.hstack(call_times))  # Use unique to remove same call detected in several windows
-        th_2_calls = 0.004
-        reps_idx = np.where(np.diff(call_times) <= th_2_calls)[0]  # array with repetition indices
-        replacements = np.array([call_times[e] + (call_times[e+1] - call_times[e]) / 2. for e in reps_idx])
-        call_times[reps_idx] = replacements  # first replace with average
-        call_times = np.delete(call_times, reps_idx+1)  # then remove the extra call
-
-        # plot the normed powers for debugging
-        # colors = ['purple', 'cornflowerblue', 'forestgreen', 'darkred']
-        # for i in np.arange(len(specs)):
-        #     plt.plot(bat.t, norm_pow[i], color=colors[i], alpha=.8)
-        #     plt.plot(bat.t[pk_arrays[i]], np.ones(len(pk_arrays[i])) * 1 + 1 * i, 'o', ms=20, color=colors[i],
-        #              alpha=.8, mec='k', mew=3)
-        # plt.plot(call_times, np.ones(len(call_times)) * 6, 'o', ms=20, color='gray', alpha=.8, mec='k', mew=3)
-
-        # plot a spectrogram that includes all channels!
-        plot_multiCH_spectrogram(np.mean(specs, axis=0), bat.t, bat.f, pk_arrays, call_times, dynamic_range=dyn_range)
-
+        ax.plot(calls[:-1], diff, 'o-', lw=2)
+        ax.plot([calls[0], calls[-1]], [med, med], '--k')
         plt.show()
         quit()
 
-
-
+    # Analyze SingleChannel
     elif rec_type == 's':
-
-        # For Myrna's data
-        # mouse = Batspy(recording, f_resolution=2**6, overlap_frac=0.4)
-        # mouse.compute_spectrogram()
-        # mouse.detect_calls(det_range=(30000., 100000.), plot_debug=True, plot_in_spec=True)
-        # plt.show()
-        # quit()
         
         bat = Batspy(recording, f_resolution=2**9, overlap_frac=.70, dynamic_range=70)  # 2^7 = 128
         bat.compute_spectrogram()
         bat.detect_calls(plot_in_spec=True)
         embed()
         quit()
-        plt.show()
-        quit()
-    
-
-    # import glob
-    # wavefiles = np.sort(glob.glob('../../data/fixed_files/*.wav'))
-
-    # for e, wf in enumerate(wavefiles):
-    #     print("\nAnalyzing file %i from %i\n" % (e+1, len(wavefiles)))
-    #     bat = Batspy(wf, dynamic_range=70)
-    #     bat.compute_spectogram()
-    #     bat.detect_calls(plot_debug=True)
-
-    #     plt.show()
-    # quit()
-
-    # # Get the data
-    # recording1 = 'test_data/natalusTumidirostris0024.wav'
-    # recording2 = 'test_result/natalusTumidirostris0045_fix.wav'
-    # recording3 = '../../data/diana/0409 Tyroptera tricolor0061 + mit isolation call.wav'
-    # stimulus = 'test_result/stim.wav'
-    #
-    # bat1 = Batspy(recording1, pcTape_rec=True)
-    # bat1.compute_spectogram()
-    # bat1.detect_calls(plot_in_spec=True, save_spec_w_calls=True)
-
-    # bat2 = Batspy(recording2, pcTape_rec=False)
-    # bat2.compute_spectogram()
-    # bat2.detect_calls(plot_debug=True, plot_in_spec=True)
-    #
-    # stim = Batspy(stimulus, pcTape_rec=False)
-    # stim.compute_spectogram()
-    # stim.detect_calls()
-    #
-    #
-    # plt.show()
-    # quit()
