@@ -18,7 +18,13 @@ def get_all_ch(single_filename):
     return np.sort(ch_list)
 
 
-def plot_multiCH_spectrogram(specs_matrix, time_arr, freq_arr, pk_idxs, all_ch_peak_times):
+def plot_multiCH_spectrogram(specs_matrix, time_arr, freq_arr, pk_idxs, all_ch_peak_times, filepath, in_kHz=True):
+
+    if in_kHz:
+        hz_fac = 1000
+    else:
+        hz_fac = 1
+
     inch_factor = 2.54
     fs = 14
     fig, ax = plt.subplots(nrows=len(specs_matrix), figsize=(50. / inch_factor, 25. / inch_factor),
@@ -28,13 +34,12 @@ def plot_multiCH_spectrogram(specs_matrix, time_arr, freq_arr, pk_idxs, all_ch_p
     for i in np.arange(len(specs_matrix)):
 
         im = ax[i].imshow(specs_matrix[i], cmap='jet',
-                          extent=[time_arr[0], time_arr[-1], freq_arr[0], freq_arr[-1]],
+                          extent=[time_arr[0], time_arr[-1], int(freq_arr[0])/hz_fac, int(freq_arr[-1])/hz_fac],
                           aspect='auto', origin='lower', alpha=0.7)
-        ax[i].plot(time_arr[pk_idxs[i]], np.ones(len(pk_idxs[i])) * 100000, 'o', ms=7, color=colors[i],
+        ax[i].plot(time_arr[pk_idxs[i]], np.ones(len(pk_idxs[i])) * 100, 'o', ms=7, color=colors[i],
                    alpha=.8, mec='k', mew=1.5)
-        ax[i].plot(all_ch_peak_times, np.ones(len(all_ch_peak_times)) * 150000, 'o', ms=7, color='gray',
+        ax[i].plot(all_ch_peak_times, np.ones(len(all_ch_peak_times)) * 150, 'o', ms=7, color='gray',
                    alpha=.8, mec='k', mew=1.5)
-        ax[i].set_yticklabels(['{:,}'.format(int(x/1000)) for x in ax[i].get_yticks().tolist()])
     # ToDo: Plot the colorbar!
     # cb_ticks = np.arange(0, dynamic_range + 10, 10)
     # cb = fig.colorbar(im)
@@ -42,6 +47,8 @@ def plot_multiCH_spectrogram(specs_matrix, time_arr, freq_arr, pk_idxs, all_ch_p
 
     ax[1].set_ylabel('Frequency [kHz]', fontsize=fs+2)
     ax[-1].set_xlabel('Time [sec]', fontsize=fs+2)
+    figtitle = '/'.join(filepath.split('/')[-4:-1]) + '/' + '_'.join(filepath.split('/')[-1].split('_')[1:3]).split('.')[0]
+    fig.suptitle(figtitle, fontsize=fs + 2)
 
     pass
 
@@ -88,6 +95,7 @@ def get_calls_across_channels(all_ch_filenames, run_window_width=0.2, step_quoti
         pk_arrays.append(p)
         spec_time = bat.t  # time array of the spectrogram
         spec_freq = bat.f  # frequency array of the spectrogram
+        recs_info = bat.file_path
 
     # The problem across channels is that there is a delay in the call from one mike to the other and
     # this results in double detections which are time-shifted.
@@ -138,7 +146,7 @@ def get_calls_across_channels(all_ch_filenames, run_window_width=0.2, step_quoti
     call_times = np.delete(call_times, reps_idx + 1)  # then remove the extra call
 
     if plot_spec:  # plot a spectrogram that includes all channels!
-        plot_multiCH_spectrogram(specs, spec_time, spec_freq, pk_arrays, call_times)
+        plot_multiCH_spectrogram(specs, spec_time, spec_freq, pk_arrays, call_times, recs_info)
 
     if debug_plot:  # plot the normed powers for debugging
         colors = ['purple', 'cornflowerblue', 'forestgreen', 'darkred']

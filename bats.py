@@ -64,15 +64,22 @@ class Batspy:
             self.plot_spectrogram()
         pass
 
-    def plot_spectrogram(self, ret_fig_and_ax=False):
+    def plot_spectrogram(self, in_kHz=True, ret_fig_and_ax=False):
         if not self.spectrogram_computed:
             self.compute_spectrogram()
+
+        if in_kHz:
+            hz_fac = 1000
+        else:
+            hz_fac = 1
 
         inch_factor = 2.54
         fs = 14
         fig, ax = plt.subplots(figsize=(56. / inch_factor, 30. / inch_factor))
-        im = ax.imshow(self.plt_spec, cmap='jet', extent=[self.t[0], self.t[-1], self.f[0], self.f[-1]], aspect='auto',
-                       origin='lower', alpha=0.7)
+        im = ax.imshow(self.plt_spec, cmap='jet',
+                       extent=[self.t[0], self.t[-1],
+                               int(self.f[0])/hz_fac, int(self.f[-1])/hz_fac],  # divide by 1000 for kHz
+                       aspect='auto', origin='lower', alpha=0.7)
         # ToDo: Impossible to update the colorbar ticks for them to be multiples of 10!!!
         cb_ticks = np.arange(0, self.dynamic_range + 10, 10)
 
@@ -115,7 +122,7 @@ class Batspy:
 
         if plot_in_spec:
             spec_fig, spec_ax = self.plot_spectrogram(ret_fig_and_ax=True)
-            spec_ax.plot(self.t[peaks], np.ones(len(peaks))*det_range[1] + (det_range[1]*0.001), 'o', ms=20,
+            spec_ax.plot(self.t[peaks], np.ones(len(peaks))*80, 'o', ms=20,
                          color='darkred', alpha=.8, mec='k', mew=3)
             spec_fig.suptitle(self.file_name.split('.')[0])
             if save_spec_w_calls:
@@ -149,15 +156,15 @@ if __name__ == '__main__':
         diff = np.diff(calls)
         med = np.median(diff)
 
-        # ToDo: Need to put the diff thing in a new function.
-        inch_factor = 2.54
-        fs = 14
-        fig, ax = plt.subplots(figsize=(50. / inch_factor, 25. / inch_factor))
-
-        ax.plot(calls[:-1], diff, 'o-', lw=2)
-        ax.plot([calls[0], calls[-1]], [med, med], '--k')
-        plt.show()
-        quit()
+        # # ToDo: Need to put the diff thing in a new function.
+        # inch_factor = 2.54
+        # fs = 14
+        # fig, ax = plt.subplots(figsize=(50. / inch_factor, 25. / inch_factor))
+        #
+        # ax.plot(calls[:-1], diff, 'o-', lw=2)
+        # ax.plot([calls[0], calls[-1]], [med, med], '--k')
+        # plt.show()
+        # quit()
 
     # Analyze SingleChannel
     elif rec_type == 's':
@@ -165,5 +172,5 @@ if __name__ == '__main__':
         bat = Batspy(recording, f_resolution=2**9, overlap_frac=.70, dynamic_range=70)  # 2^7 = 128
         bat.compute_spectrogram()
         bat.detect_calls(plot_in_spec=True)
-        embed()
+        plt.show()
         quit()
