@@ -95,13 +95,7 @@ class Batspy:
         else:
             pass
 
-    def detect_calls(self, det_range=(40000, 150000), d_range_det_th=0.1, plot_debug=False,
-                     plot_in_spec=False, save_spec_w_calls=False):
-
-        if d_range_det_th > 1. or d_range_det_th < 0.:
-            raise(ValueError("The detection threshold should be between 0 and 1"))
-
-        # SET A PROPER THRESHOLD
+    def detect_calls(self, det_range=(40000, 150000), plot_debug=False, plot_in_spec=False, save_spec_w_calls=False):
 
         # Get an average over all frequency channels within detection range
         av_power = np.mean(self.spec_mat[np.logical_and(self.f > det_range[0], self.f < det_range[1])], axis=0)
@@ -110,7 +104,7 @@ class Batspy:
         # Fix cases where th <= 0
         if th <= 0:
             th = np.mean(av_power)
-        peaks, troughs = detect_peaks(av_power, th)
+        peaks, troughs = detect_peaks(av_power, th)  # Use thunderfish's peak-trough algorithm
 
         if plot_debug:
             fig, ax = plt.subplots()
@@ -122,7 +116,7 @@ class Batspy:
 
         if plot_in_spec:
             spec_fig, spec_ax = self.plot_spectrogram(ret_fig_and_ax=True)
-            spec_ax.plot(self.t[peaks], np.ones(len(peaks))*80, 'o', ms=20,
+            spec_ax.plot(self.t[peaks], np.ones(len(peaks))*80, 'o', ms=20,  # plots the detection at 80kHz
                          color='darkred', alpha=.8, mec='k', mew=3)
             spec_fig.suptitle(self.file_name.split('.')[0])
             if save_spec_w_calls:
@@ -163,8 +157,8 @@ if __name__ == '__main__':
         #
         # ax.plot(calls[:-1], diff, 'o-', lw=2)
         # ax.plot([calls[0], calls[-1]], [med, med], '--k')
-        # plt.show()
-        # quit()
+        plt.show()
+        quit()
 
     # Analyze SingleChannel
     elif rec_type == 's':

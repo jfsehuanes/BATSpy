@@ -18,7 +18,8 @@ def get_all_ch(single_filename):
     return np.sort(ch_list)
 
 
-def plot_multiCH_spectrogram(specs_matrix, time_arr, freq_arr, pk_idxs, all_ch_peak_times, filepath, in_kHz=True):
+def plot_multiCH_spectrogram(specs_matrix, time_arr, freq_arr, pk_idxs, all_ch_peak_times,
+                             filepath, dyn_range=70, in_kHz=True):
 
     if in_kHz:
         hz_fac = 1000
@@ -32,6 +33,10 @@ def plot_multiCH_spectrogram(specs_matrix, time_arr, freq_arr, pk_idxs, all_ch_p
     colors = ['purple', 'cornflowerblue', 'forestgreen', 'darkred']
 
     for i in np.arange(len(specs_matrix)):
+
+        # Reduce the noise by subtracting the mean power of the spectrum plus 5dB
+        med = np.median(specs_matrix[i]) + 5
+        specs_matrix[i][specs_matrix[i] <= med] = -dyn_range
 
         im = ax[i].imshow(specs_matrix[i], cmap='jet',
                           extent=[time_arr[0], time_arr[-1], int(freq_arr[0])/hz_fac, int(freq_arr[-1])/hz_fac],
@@ -47,14 +52,15 @@ def plot_multiCH_spectrogram(specs_matrix, time_arr, freq_arr, pk_idxs, all_ch_p
 
     ax[1].set_ylabel('Frequency [kHz]', fontsize=fs+2)
     ax[-1].set_xlabel('Time [sec]', fontsize=fs+2)
-    figtitle = '/'.join(filepath.split('/')[-4:-1]) + '/' + '_'.join(filepath.split('/')[-1].split('_')[1:3]).split('.')[0]
+    figtitle = '/'.join(filepath.split('/')[-4:-1]) + '/' +\
+               '_'.join(filepath.split('/')[-1].split('_')[1:3]).split('.')[0]
     fig.suptitle(figtitle, fontsize=fs + 2)
 
     pass
 
 
-def get_calls_across_channels(all_ch_filenames, run_window_width=0.2, step_quotient=4,
-                              ch_jitter_th=0.005, plot_spec=False, debug_plot=False):
+def get_calls_across_channels(all_ch_filenames, run_window_width=0.2, step_quotient=4, ch_jitter_th=0.005,
+                              f_res=2**9, overlap=0.7, dr=70, plot_spec=False, debug_plot=False):
     """
 
     Parameters
@@ -69,6 +75,12 @@ def get_calls_across_channels(all_ch_filenames, run_window_width=0.2, step_quoti
     ch_jitter_th: float.
         The threshold below which calls are considered repetitions (i.e. multiple detections)
         in several channels
+    f_res: int power of 2
+        The frequency resolution for the powerspectrum. See Batspy-class for details.
+    overlap: float between 0 & 1
+        Overlap fraction of the FFT windows. See Batspy-class for details.
+    dr: int.
+        Sets the dynamic range for spectrogram. See Batspy-class for details.
     plot_spec: bool.
         Set to True if you wish to have spectrograms with detected calls plotted.
 
@@ -88,7 +100,7 @@ def get_calls_across_channels(all_ch_filenames, run_window_width=0.2, step_quoti
 
     for rec_idx in np.arange(len(all_ch_filenames)):
         print('\nAnalyzing Channel ' + str(rec_idx + 1) + ' of ' + str(len(all_ch_filenames)) + '...')
-        bat = Batspy(all_ch_filenames[rec_idx], f_resolution=2 ** 9, overlap_frac=.70, dynamic_range=70)
+        bat = Batspy(all_ch_filenames[rec_idx], f_resolution=f_res, overlap_frac=overlap, dynamic_range=dr)
         bat.compute_spectrogram()
         specs.append(bat.plt_spec)
         _, p, _ = bat.detect_calls()
@@ -146,7 +158,7 @@ def get_calls_across_channels(all_ch_filenames, run_window_width=0.2, step_quoti
     call_times = np.delete(call_times, reps_idx + 1)  # then remove the extra call
 
     if plot_spec:  # plot a spectrogram that includes all channels!
-        plot_multiCH_spectrogram(specs, spec_time, spec_freq, pk_arrays, call_times, recs_info)
+        plot_multiCH_spectrogram(specs, spec_time, spec_freq, pk_arrays, call_times, recs_info, dyn_range=dr)
 
     if debug_plot:  # plot the normed powers for debugging
         colors = ['purple', 'cornflowerblue', 'forestgreen', 'darkred']
