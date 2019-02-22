@@ -165,7 +165,8 @@ if __name__ == '__main__':
 
     # Analyze SingleChannel
     elif rec_type == 's':
-        
+
+        from helper_functions import extract_peak_and_th_crossings_from_cumhist
         bat = Batspy(recording, f_resolution=2**9, overlap_frac=.70, dynamic_range=70)  # 2^7 = 128
         bat.compute_spectrogram()
         average_power, peaks, _ = bat.detect_calls(strict_th=True, plot_in_spec=False)
@@ -194,77 +195,35 @@ if __name__ == '__main__':
             call_specs[i] = dec_spec
 
             # Get call start and end
-            db_th = 25
+            db_th = 20
             call_freq_range = (50000, 180000)  # in 40kHz we sadly include noisy artifacts
             filtered_spec = dec_spec[np.logical_and(f > call_freq_range[0], f < call_freq_range[1])]
             filtered_spec[filtered_spec < -db_th] = -db_th  # this clears the noise of the spectrogram
-            av_fsp = np.mean(filtered_spec, axis=0)  # mean over all frequency channels
-            av_power = av_fsp - np.min(av_fsp)  # make all values positive for the peak-det-algorithm to work
-            perc = np.percentile(av_power, 70)
 
-            thresh = np.min(av_power)  # threshold for the peak-detector
-            if thresh <= 0:  # Fix cases where th <= 0
-                thresh = np.mean(av_power)
-            pks, trs = detect_peaks(av_power, thresh)
+            calltime_pk, calltime_boundaries = \
+                extract_peak_and_th_crossings_from_cumhist(filtered_spec, 0, t)
 
-            if len(pks) == 0:
-                print('\nWARNING! No peak detected in detailed spectrogram of detected call #%.0f. Proceeding '
-                      'analysis without including this call!\n' % i)
+            if len(calltime_boundaries) == 0:
+                print('\nWARNING! No peak detected in detailed spectrogram of detected call #%.0f.'
+                      'Proceeding analysis without including this call!\n' % i)
                 continue
-
-            # since more than one peak might be detected, need to choose the one with the highest power
-            mx_pk = pks[np.argmax(av_power[pks])]
-
-            crossings = np.where(np.diff(av_power > perc))[0]  # gives the crossings where av_power>perc_th
-            # now I extract the sign of crossing differences to the peak. 0 marks the right crossings
-            sign_to_pk = np.sign(t[crossings] - t[mx_pk])
-            # look for the crossings pair where the peak is in the middle of both
-            call_crossing_idx = np.where(sign_to_pk[:-1] + sign_to_pk[1:] == 0)[0][0]
-            call_boundaries = crossings[call_crossing_idx: call_crossing_idx+2]
 
             # Now get peak-frequency
 
             # new frequency array of the filtered spectrogram
             freqs_of_filtspec = np.linspace(call_freq_range[0], call_freq_range[-1], np.shape(filtered_spec)[0])
-            peak_frequency = freqs_of_filtspec[np.argmax(filtered_spec[:, mx_pk])]
-
-            freqs_at_boundaries = np.zeros(len(call_boundaries), dtype=int)
-            for cbi in np.arange(len(call_boundaries)):
-                freqs_at_boundaries[cbi] = np.argmax(filtered_spec[:, call_boundaries[cbi]])
-
-
-
-
-
-            # above_th = norm_av > perc
-            # true_arr_len = int(np.ceil(len(t)*.1))  # 10% of len(t)=10ms is around 1ms
-            # trues_array = np.array([True for e in np.arange(true_arr_len)], dtype=bool)
-            #
-            # window_after_cross = [above_th[e + 1: e + true_arr_len+1]
-            #                       for e in crossings if e + 1 < len(above_th)]
-            # th_crossing_ids = np.where([np.sum(e) == np.sum(trues_array)
-            #                             for e in window_after_cross])[0]
-            # if len(th_crossing_ids) == 0:
-            #     print('\nWARNING! call not longer than %.5f seconds. Dropping call!\n')
-            #     continue
-            # call_crossing_ids = crossings[th_crossing_ids[0]: th_crossing_ids[0]+2]
-
-            # fig, ax = plt.subplots()
-            # ax.plot(t, norm_av)
-            # ax.plot(t[mx_pk], norm_av[mx_pk], 'or', ms=12, mec='k', mew=1.5, alpha=0.7)
-            # ax.plot([t[0], t[-1]], [perc, perc], '-k', alpha=0.8)
-            # ax.plot(t[call_boundaries], norm_av[call_boundaries], 'o',
-            #         color='gray', ms=20, mec='k', mew=2, alpha=.7)
+            # ToDo: separate time detection boundaries from frequency in two functions. use the time boundaries as an extra filter in the spectrogram!! This might even help with the artifacts of the recording!
+            pkf_idx, callfreq_boundaries = \
+                extract_peak_and_th_crossings_from_cumhist(filtered_spec, 1, freqs_of_filtspec,
+                                                           perc_th=10.)
+            peak_frequency = freqs_of_filtspec[pkf_idx]
 
             fig, ax = bat.plot_spectrogram(dec_spec, f, t, ret_fig_and_ax=True)
-            ax.plot(t[call_boundaries], freqs_of_filtspec[freqs_at_boundaries]/1000., 'o',
+            ax.plot(t[calltime_boundaries], freqs_of_filtspec[callfreq_boundaries]/1000., 'o',
                     color='gray', ms=20, mec='k', mew=2, alpha=.7)
-            ax.plot(t[mx_pk], peak_frequency/1000., 'o',
+            ax.plot(t[calltime_pk], peak_frequency/1000., 'o',
                     color='navy', ms=15, mec='k', mew=2, alpha=.7)
 
-            # if i == 50:
-            #     embed()
-            #     quit()
             import os
             save_path = '../../data/temp_batspy/' + '/'.join(bat.file_path.split('/')[5:-1]) +\
                         '/' + bat.file_name.split('.')[0] + '/'
