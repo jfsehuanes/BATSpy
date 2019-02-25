@@ -182,7 +182,7 @@ if __name__ == '__main__':
         call_specs = [[] for e in np.arange(len(call_windows))]
 
         for i in np.arange(len(call_windows)):  # loop through the windows
-            s, f, t = spectrogram(call_windows[i], samplerate=bat.sampling_rate, fresolution=2**11,
+            s, f, t = spectrogram(call_windows[i], samplerate=bat.sampling_rate, fresolution=2**12,
                                   overlap_frac=0.99)  # Compute a high-res spectrogram of the window
 
             # set dynamic range
@@ -195,34 +195,101 @@ if __name__ == '__main__':
             call_specs[i] = dec_spec
 
             # Get call start and end
-            db_th = 20
-            call_freq_range = (50000, 180000)  # in 40kHz we sadly include noisy artifacts
+            db_th = 16
+            call_freq_range = (101000, 159000)  # in 40kHz we sadly include noisy artifacts
             filtered_spec = dec_spec[np.logical_and(f > call_freq_range[0], f < call_freq_range[1])]
-            filtered_spec[filtered_spec < -db_th] = -db_th  # this clears the noise of the spectrogram
+            # filtered_spec[filtered_spec < -db_th] = -db_th  # this clears the noise of the spectrogram
 
-            calltime_pk, calltime_boundaries = \
-                extract_peak_and_th_crossings_from_cumhist(filtered_spec, 0, t)
+            freqs_of_filtspec = np.linspace(call_freq_range[0], call_freq_range[-1], np.shape(filtered_spec)[0])
 
-            if len(calltime_boundaries) == 0:
-                print('\nWARNING! No peak detected in detailed spectrogram of detected call #%.0f.'
+            # calltime_pk, prov_calltime = \
+            #     extract_peak_and_th_crossings_from_cumhist(filtered_spec, 0, t, perc_th=50)
+            #
+            # if len(prov_calltime) == 0:
+            #     print('\nWARNING! No peak detected in detailed spectrogram of detected call #%.0f.'
+            #           'Proceeding analysis without including this call!\n' % i)
+            #     continue
+            #
+            # # shrink the time-window
+            # w = 15
+            # t_shrink = t[prov_calltime[0] - w:prov_calltime[-1] + w]
+            # filtered_spec = filtered_spec[:, np.logical_and((t > t[prov_calltime[0]-w]), (t < [prov_calltime[1]+w]))]
+
+
+            # NEW METHOD!
+
+            # get peak frequency
+            peak_f_idx = np.unravel_index(filtered_spec.argmax(), filtered_spec.shape)  # get the peak-frequency indices
+            t_argmaxs = np.array([np.argmax(filtered_spec[:, e]) for e in np.arange(len(t))])
+            coors = [(t_argmaxs[e], e) for e in np.arange(len(t_argmaxs))]  # coordinates of the Kringel-Line
+
+            steps = len(t)//5
+            diff_th = 5000  # in Hz
+            end_idx = 0
+            start_idx = 0
+
+            for step in np.arange(peak_f_idx[-1], peak_f_idx[-1]+steps):  # walk from peak-f to call-end
+                c_db = filtered_spec[coors[step]]
+                if c_db < -db_th:
+                    end_idx = step
+                    break
+                else:
+                    continue
+
+            for bstep in np.arange(peak_f_idx[-1], peak_f_idx[-1]-steps, -1):  # walk from peak-f to call-start
+                c_db = filtered_spec[coors[bstep]]
+                if c_db < -db_th:
+                    start_idx = bstep
+                    break
+                else:
+                    continue
+
+            if np.logical_or(start_idx == 0, end_idx == 0):
+                print('\nWARNING! There was a problem detecting call #%.0f.'
                       'Proceeding analysis without including this call!\n' % i)
                 continue
 
-            # Now get peak-frequency
+            call_boundaries = np.array([start_idx, end_idx])
 
-            # new frequency array of the filtered spectrogram
-            freqs_of_filtspec = np.linspace(call_freq_range[0], call_freq_range[-1], np.shape(filtered_spec)[0])
-            # ToDo: separate time detection boundaries from frequency in two functions. use the time boundaries as an extra filter in the spectrogram!! This might even help with the artifacts of the recording!
-            pkf_idx, callfreq_boundaries = \
-                extract_peak_and_th_crossings_from_cumhist(filtered_spec, 1, freqs_of_filtspec,
-                                                           perc_th=10.)
-            peak_frequency = freqs_of_filtspec[pkf_idx]
+
+
+            # above_db_th = np.array([filtered_spec[e] > -db_th for e in coors], dtype=bool)
+            # crossings = np.where(np.diff(above_db_th))[0]
+            # # now I extract the sign of crossing differences to the peak. 0 marks the right crossings
+            # sign_to_pk = np.sign(t[crossings] - t[mx_f[-1]])
+            # # look for the crossings pair where the peak is in the middle of both
+            # call_crossing_idx = np.where(sign_to_pk[:-1] + sign_to_pk[1:] == 0)[0][0]
+            # call_boundaries = crossings[call_crossing_idx: call_crossing_idx+2]
+            # call_boundaries[0] = call_boundaries[0]+1  # gets the right start index!
+
+            # calltime_pk, calltime_boundaries = \
+            #     extract_peak_and_th_crossings_from_cumhist(filtered_spec, 0, t)
+            #
+            # if len(calltime_boundaries) == 0:
+            #     print('\nWARNING! No peak detected in detailed spectrogram of detected call #%.0f.'
+            #           'Proceeding analysis without including this call!\n' % i)
+            #     continue
+            #
+            # # Now get peak-frequency
+            #
+            # # new frequency array of the filtered spectrogram
+            # freqs_of_filtspec = np.linspace(call_freq_range[0], call_freq_range[-1], np.shape(filtered_spec)[0])
+            # pkf_idx, callfreq_boundaries = \
+            #     extract_peak_and_th_crossings_from_cumhist(filtered_spec, 1, freqs_of_filtspec,
+            #                                                perc_th=10.)
+            # peak_frequency = freqs_of_filtspec[pkf_idx]
 
             fig, ax = bat.plot_spectrogram(dec_spec, f, t, ret_fig_and_ax=True)
-            ax.plot(t[calltime_boundaries], freqs_of_filtspec[callfreq_boundaries]/1000., 'o',
-                    color='gray', ms=20, mec='k', mew=2, alpha=.7)
-            ax.plot(t[calltime_pk], peak_frequency/1000., 'o',
-                    color='navy', ms=15, mec='k', mew=2, alpha=.7)
+            # ax.plot(t[prov_calltime], freqs_of_filtspec[callfreq_boundaries]/1000., 'o',
+            #         color='gray', ms=20, mec='k', mew=2, alpha=.7)
+            # ax.plot(t[calltime_pk], peak_frequency/1000., 'o',
+            #         color='navy', ms=15, mec='k', mew=2, alpha=.7)
+
+            ax.plot(t, freqs_of_filtspec[t_argmaxs]/1000., 'o', color='gray', ms=8, mec='k', mew=2, alpha=.4)
+            ax.plot(t[call_boundaries], freqs_of_filtspec[t_argmaxs[call_boundaries]]/1000., 'o', color='navy', ms=15,
+                    mec='k', mew=2, alpha=.7)
+            ax.plot(t[peak_f_idx[-1]], freqs_of_filtspec[peak_f_idx[0]] / 1000., 'o', color='navy', ms=15,
+                    mec='k', mew=2, alpha=.7)
 
             import os
             save_path = '../../data/temp_batspy/' + '/'.join(bat.file_path.split('/')[5:-1]) +\

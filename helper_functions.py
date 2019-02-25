@@ -6,14 +6,15 @@ from thunderfish.eventdetection import detect_peaks
 from IPython import embed
 
 
-def extract_peak_and_th_crossings_from_cumhist(mat, axis, label_array, perc_th=70, neg_sweep_slope=True, plot_debug=False):
+def extract_peak_and_th_crossings_from_cumhist(mat, axis, label_array, perc_th=70,
+                                               neg_sweep_slope=True, plot_debug=False):
 
     av = np.mean(mat, axis=axis)  # mean over all frequency channels
     abs_av = av - np.min(av)  # make all values positive for the peak-det-algorithm to work
     perc = np.percentile(abs_av, perc_th)
 
-    if axis == 1:  # ToDo: need a cleaner way to solve the artifacts issue in my recordings
-        abs_av[np.logical_or((label_array < 98000.), (label_array > 159000.))] = 0.
+    # if axis == 1:  # ToDo: need a cleaner way to solve the artifacts issue in my recordings
+    #     abs_av[np.logical_or((label_array < 98000.), (label_array > 159000.))] = 0.
 
     thresh = np.min(abs_av)  # threshold for the peak-detector
     if thresh <= 0:  # Fix cases where th <= 0
@@ -30,7 +31,11 @@ def extract_peak_and_th_crossings_from_cumhist(mat, axis, label_array, perc_th=7
     # now I extract the sign of crossing differences to the peak. 0 marks the right crossings
     sign_to_pk = np.sign(label_array[crossings] - label_array[mx_pk])
     # look for the crossings pair where the peak is in the middle of both
-    call_crossing_idx = np.where(sign_to_pk[:-1] + sign_to_pk[1:] == 0)[0][0]
+    try:
+        call_crossing_idx = np.where(sign_to_pk[:-1] + sign_to_pk[1:] == 0)[0][0]
+    except IndexError:
+        embed()
+        quit()
     call_boundaries = crossings[call_crossing_idx: call_crossing_idx + 2]
 
     if plot_debug:
