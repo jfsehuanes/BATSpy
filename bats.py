@@ -6,7 +6,9 @@ import matplotlib.pyplot as plt
 
 from thunderfish.dataloader import load_data
 from thunderfish.powerspectrum import spectrogram, decibel
-from thunderfish.eventdetection import detect_peaks
+from thunderfish.eventdetection import detect_peaks, percentile_threshold
+from thunderfish.harmonicgroups import harmonic_groups
+from thunderfish.powerspectrum import psd
 
 from IPython import embed
 
@@ -194,37 +196,43 @@ if __name__ == '__main__':
             dec_spec[dec_spec < -single_spec_dyn_range] = -single_spec_dyn_range
             call_specs[i] = dec_spec
 
-            # Get call start and end
-            db_th = 16
-            call_freq_range = (101000, 159000)  # in 40kHz we sadly include noisy artifacts
+            # Extract noisy artifacts
+            noise_wlength = len(t) // 5
+            blanc_spec = np.hstack((dec_spec[:, :noise_wlength], dec_spec[:, -noise_wlength:]))
+            noise_psd = np.mean(blanc_spec, axis=1)
+
+            first_n_th = percentile_threshold(noise_psd, thresh_fac=0.6, percentile=1.0)
+
+            noise_pk, noise_tr = detect_peaks(noise_psd, threshold=first_n_th)  # th is in dB
+            # ToDo: Killalll peaks < x dB of max(noise_psd(noise_pk))
+
+            # ToDo: substract is s (not in dec_spec) the noise bands of the artifacts! Then "re-decibel"
+
+            # Todo: change argmax for peak detection in each time slot with th = abs([0dB - median(spec)] * 0.5)
+
+            # ToDo: discard all peaks of previous step where peak < 20db
+
+            noise_attenuation = 4  # in dB
+            adjacent_th = 3000  # in Hz
+            # number of slots left and right of each pk noise to be attenuated
+            adj_noisefreq_slots = np.where(f - f[1] <= adjacent_th)[0][-1] - 1
+            freq_ids_to_attn = np.unique([[e - adj_noisefreq_slots, e, e + adj_noisefreq_slots]\
+                                          for e in noise_pk if e+adj_noisefreq_slots < len(f)])
+            dec_spec[freq_ids_to_attn, :] = dec_spec[freq_ids_to_attn, :] - noise_attenuation
+
+            call_freq_range = (50000, 250000)
             filtered_spec = dec_spec[np.logical_and(f > call_freq_range[0], f < call_freq_range[1])]
-            # filtered_spec[filtered_spec < -db_th] = -db_th  # this clears the noise of the spectrogram
-
             freqs_of_filtspec = np.linspace(call_freq_range[0], call_freq_range[-1], np.shape(filtered_spec)[0])
-
-            # calltime_pk, prov_calltime = \
-            #     extract_peak_and_th_crossings_from_cumhist(filtered_spec, 0, t, perc_th=50)
-            #
-            # if len(prov_calltime) == 0:
-            #     print('\nWARNING! No peak detected in detailed spectrogram of detected call #%.0f.'
-            #           'Proceeding analysis without including this call!\n' % i)
-            #     continue
-            #
-            # # shrink the time-window
-            # w = 15
-            # t_shrink = t[prov_calltime[0] - w:prov_calltime[-1] + w]
-            # filtered_spec = filtered_spec[:, np.logical_and((t > t[prov_calltime[0]-w]), (t < [prov_calltime[1]+w]))]
-
-
-            # NEW METHOD!
 
             # get peak frequency
             peak_f_idx = np.unravel_index(filtered_spec.argmax(), filtered_spec.shape)  # get the peak-frequency indices
+
+            # Get call start and end
+            db_th = 16
             t_argmaxs = np.array([np.argmax(filtered_spec[:, e]) for e in np.arange(len(t))])
             coors = [(t_argmaxs[e], e) for e in np.arange(len(t_argmaxs))]  # coordinates of the Kringel-Line
 
             steps = len(t)//5
-            diff_th = 5000  # in Hz
             end_idx = 0
             start_idx = 0
 
@@ -251,39 +259,7 @@ if __name__ == '__main__':
 
             call_boundaries = np.array([start_idx, end_idx])
 
-
-
-            # above_db_th = np.array([filtered_spec[e] > -db_th for e in coors], dtype=bool)
-            # crossings = np.where(np.diff(above_db_th))[0]
-            # # now I extract the sign of crossing differences to the peak. 0 marks the right crossings
-            # sign_to_pk = np.sign(t[crossings] - t[mx_f[-1]])
-            # # look for the crossings pair where the peak is in the middle of both
-            # call_crossing_idx = np.where(sign_to_pk[:-1] + sign_to_pk[1:] == 0)[0][0]
-            # call_boundaries = crossings[call_crossing_idx: call_crossing_idx+2]
-            # call_boundaries[0] = call_boundaries[0]+1  # gets the right start index!
-
-            # calltime_pk, calltime_boundaries = \
-            #     extract_peak_and_th_crossings_from_cumhist(filtered_spec, 0, t)
-            #
-            # if len(calltime_boundaries) == 0:
-            #     print('\nWARNING! No peak detected in detailed spectrogram of detected call #%.0f.'
-            #           'Proceeding analysis without including this call!\n' % i)
-            #     continue
-            #
-            # # Now get peak-frequency
-            #
-            # # new frequency array of the filtered spectrogram
-            # freqs_of_filtspec = np.linspace(call_freq_range[0], call_freq_range[-1], np.shape(filtered_spec)[0])
-            # pkf_idx, callfreq_boundaries = \
-            #     extract_peak_and_th_crossings_from_cumhist(filtered_spec, 1, freqs_of_filtspec,
-            #                                                perc_th=10.)
-            # peak_frequency = freqs_of_filtspec[pkf_idx]
-
-            fig, ax = bat.plot_spectrogram(dec_spec, f, t, ret_fig_and_ax=True)
-            # ax.plot(t[prov_calltime], freqs_of_filtspec[callfreq_boundaries]/1000., 'o',
-            #         color='gray', ms=20, mec='k', mew=2, alpha=.7)
-            # ax.plot(t[calltime_pk], peak_frequency/1000., 'o',
-            #         color='navy', ms=15, mec='k', mew=2, alpha=.7)
+            fig, ax = bat.plot_spectrogram(filtered_spec, freqs_of_filtspec, t, ret_fig_and_ax=True)
 
             ax.plot(t, freqs_of_filtspec[t_argmaxs]/1000., 'o', color='gray', ms=8, mec='k', mew=2, alpha=.4)
             ax.plot(t[call_boundaries], freqs_of_filtspec[t_argmaxs[call_boundaries]]/1000., 'o', color='navy', ms=15,
