@@ -181,7 +181,6 @@ if __name__ == '__main__':
         call_windows = [bat.recording_trace[np.logical_and(time >= bat.t[e]-window_width/2.,
                                                            time <= bat.t[e]+window_width/2.)]
                         for e in peaks]
-        call_specs = [[] for e in np.arange(len(call_windows))]
 
         for i in np.arange(len(call_windows)):  # loop through the windows
             s, f, t = spectrogram(call_windows[i], samplerate=bat.sampling_rate, fresolution=2**12,
@@ -194,30 +193,27 @@ if __name__ == '__main__':
             ampl_max = np.nanmax(dec_spec)
             dec_spec -= ampl_max + 1e-20  # subtract maximum so that the maximum value is set to lim x--> -0
             dec_spec[dec_spec < -single_spec_dyn_range] = -single_spec_dyn_range
-            call_specs[i] = dec_spec
 
             # Extract noisy artifacts
             noise_wlength = len(t) // 5
             blanc_spec = np.hstack((dec_spec[:, :noise_wlength], dec_spec[:, -noise_wlength:]))
             noise_psd = np.mean(blanc_spec, axis=1)
 
-            first_n_th = percentile_threshold(noise_psd, thresh_fac=0.6, percentile=1.0)
+            th_noise = percentile_threshold(noise_psd, thresh_fac=0.3, percentile=1.0)
 
-            noise_pk, noise_tr = detect_peaks(noise_psd, threshold=first_n_th)  # th is in dB
-            # ToDo: Killalll peaks < x dB of max(noise_psd(noise_pk))
+            noise_pks, noise_tr = detect_peaks(noise_psd, threshold=th_noise)  # th is in dB
+            # Kill-all peaks < x dB of max(noise_psd(noise_pk))
+            mx_noise_pk = np.max(noise_psd[noise_pks])
+            th_from_maxpk = 5  # in dB
+            valid_noise_pks = noise_pks[noise_psd[noise_pks] > mx_noise_pk - th_from_maxpk]
 
-            # ToDo: substract is s (not in dec_spec) the noise bands of the artifacts! Then "re-decibel"
-
-            # Todo: change argmax for peak detection in each time slot with th = abs([0dB - median(spec)] * 0.5)
-
-            # ToDo: discard all peaks of previous step where peak < 20db
-
+            # ToDo: subtract is s (not in dec_spec) the noise bands of the artifacts! Then "re-decibel"
             noise_attenuation = 4  # in dB
             adjacent_th = 3000  # in Hz
             # number of slots left and right of each pk noise to be attenuated
             adj_noisefreq_slots = np.where(f - f[1] <= adjacent_th)[0][-1] - 1
-            freq_ids_to_attn = np.unique([[e - adj_noisefreq_slots, e, e + adj_noisefreq_slots]\
-                                          for e in noise_pk if e+adj_noisefreq_slots < len(f)])
+            freq_ids_to_attn = np.unique([[e - adj_noisefreq_slots, e, e + adj_noisefreq_slots] \
+                                          for e in noise_pks if e + adj_noisefreq_slots < len(f)])
             dec_spec[freq_ids_to_attn, :] = dec_spec[freq_ids_to_attn, :] - noise_attenuation
 
             call_freq_range = (50000, 250000)
@@ -225,19 +221,29 @@ if __name__ == '__main__':
             freqs_of_filtspec = np.linspace(call_freq_range[0], call_freq_range[-1], np.shape(filtered_spec)[0])
 
             # get peak frequency
-            peak_f_idx = np.unravel_index(filtered_spec.argmax(), filtered_spec.shape)  # get the peak-frequency indices
+            peak_f_idx = np.unravel_index(filtered_spec.argmax(),
+                                          filtered_spec.shape)  # get the peak-frequency coordinates
+
+            # Todo: change argmax for peak detection in each time slot with th = abs([0dB - median(spec)] * 0.5)
+            db_th = 16
+            peaks_per_window = np.array([detect_peaks(filtered_spec[:, e], th_noise)[0] for e in np.arange(len(t))])
+            coors = [(peaks_per_window[e])
+                     for e in np.arange(len(peaks_per_window))]  # coordinates of the Kringel-Line
+
+            # ToDo: discard all peaks of previous step where peak < 20db
+            valid_peaks_p_w = [np.where(filtered_spec[coors[e]] > -db_th)[0] for e in np.arange(len(coors))]  # Todo: NEED TO CHECK HOW THIS WOOORKS PROPERLY!
 
             # Get call start and end
-            db_th = 16
-            t_argmaxs = np.array([np.argmax(filtered_spec[:, e]) for e in np.arange(len(t))])
-            coors = [(t_argmaxs[e], e) for e in np.arange(len(t_argmaxs))]  # coordinates of the Kringel-Line
-
             steps = len(t)//5
             end_idx = 0
             start_idx = 0
 
             for step in np.arange(peak_f_idx[-1], peak_f_idx[-1]+steps):  # walk from peak-f to call-end
-                c_db = filtered_spec[coors[step]]
+                c_db = filtered_spec[valid_peaks_p_w[step], step][0]
+
+                if len(c_db) == 0:
+                    continue
+
                 if c_db < -db_th:
                     end_idx = step
                     break
@@ -245,7 +251,11 @@ if __name__ == '__main__':
                     continue
 
             for bstep in np.arange(peak_f_idx[-1], peak_f_idx[-1]-steps, -1):  # walk from peak-f to call-start
-                c_db = filtered_spec[coors[bstep]]
+                c_db = filtered_spec[valid_peaks_p_w[bstep], bstep][0]
+
+                if len(c_db) == 0:
+                    continue
+
                 if c_db < -db_th:
                     start_idx = bstep
                     break
@@ -261,8 +271,8 @@ if __name__ == '__main__':
 
             fig, ax = bat.plot_spectrogram(filtered_spec, freqs_of_filtspec, t, ret_fig_and_ax=True)
 
-            ax.plot(t, freqs_of_filtspec[t_argmaxs]/1000., 'o', color='gray', ms=8, mec='k', mew=2, alpha=.4)
-            ax.plot(t[call_boundaries], freqs_of_filtspec[t_argmaxs[call_boundaries]]/1000., 'o', color='navy', ms=15,
+            ax.plot(t, freqs_of_filtspec[peaks_per_window] / 1000., 'o', color='gray', ms=8, mec='k', mew=2, alpha=.4)
+            ax.plot(t[call_boundaries], freqs_of_filtspec[peaks_per_window[call_boundaries]] / 1000., 'o', color='navy', ms=15,
                     mec='k', mew=2, alpha=.7)
             ax.plot(t[peak_f_idx[-1]], freqs_of_filtspec[peak_f_idx[0]] / 1000., 'o', color='navy', ms=15,
                     mec='k', mew=2, alpha=.7)
