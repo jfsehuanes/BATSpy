@@ -172,6 +172,8 @@ if __name__ == '__main__':
         bat = Batspy(recording, f_resolution=2**9, overlap_frac=.70, dynamic_range=70)  # 2^7 = 128
         bat.compute_spectrogram()
         average_power, peaks, _ = bat.detect_calls(strict_th=True, plot_in_spec=False)
+        # ToDo: Make a better noise analysis and adapt the call-feature-detection-thresholds, so that this also works
+        # ToDo: when strict_th=False!
 
         # Goal now is to create small windows for each call
         # make a time array with the sampling rate
@@ -182,8 +184,8 @@ if __name__ == '__main__':
                                                            time <= bat.t[e]+window_width/2.)]
                         for e in peaks]
 
-        for i in np.arange(len(call_windows)):  # loop through the windows
-            s, f, t = spectrogram(call_windows[i], samplerate=bat.sampling_rate, fresolution=2**12,
+        for c_call in np.arange(len(call_windows)):  # loop through the windows
+            s, f, t = spectrogram(call_windows[c_call], samplerate=bat.sampling_rate, fresolution=2 ** 12,
                                   overlap_frac=0.99)  # Compute a high-res spectrogram of the window
 
             # set dynamic range
@@ -207,7 +209,8 @@ if __name__ == '__main__':
             th_from_maxpk = 5  # in dB
             valid_noise_pks = noise_pks[noise_psd[noise_pks] > mx_noise_pk - th_from_maxpk]
 
-            # ToDo: subtract is s (not in dec_spec) the noise bands of the artifacts! Then "re-decibel"
+            # ToDo: subtract the corresponding value of each peak detected in noise_pks in s (not in dec_spec),
+            # ToDO: i.e. the noise bands of the artifacts! Then "re-decibel"
             noise_attenuation = 4  # in dB
             adjacent_th = 3000  # in Hz
             # number of slots left and right of each pk noise to be attenuated
@@ -224,56 +227,67 @@ if __name__ == '__main__':
             peak_f_idx = np.unravel_index(filtered_spec.argmax(),
                                           filtered_spec.shape)  # get the peak-frequency coordinates
 
-            # Todo: change argmax for peak detection in each time slot with th = abs([0dB - median(spec)] * 0.5)
+            # peak detection in each time slot with th = abs([0dB - median(spec)] * 0.5)
             db_th = 16
-            peaks_per_window = np.array([detect_peaks(filtered_spec[:, e], th_noise)[0] for e in np.arange(len(t))])
-            coors = [(peaks_per_window[e])
-                     for e in np.arange(len(peaks_per_window))]  # coordinates of the Kringel-Line
+            peakdet_th_in_mat = np.abs(np.max(blanc_spec) - np.median(blanc_spec) * 0.5)
 
-            # ToDo: discard all peaks of previous step where peak < 20db
-            valid_peaks_p_w = [np.where(filtered_spec[coors[e]] > -db_th)[0] for e in np.arange(len(coors))]  # Todo: NEED TO CHECK HOW THIS WOOORKS PROPERLY!
-
-            # Get call start and end
-            steps = len(t)//5
-            end_idx = 0
-            start_idx = 0
-
-            for step in np.arange(peak_f_idx[-1], peak_f_idx[-1]+steps):  # walk from peak-f to call-end
-                c_db = filtered_spec[valid_peaks_p_w[step], step][0]
-
-                if len(c_db) == 0:
+            # discard all peaks of previous step where peak < th
+            ls_to_fill = []
+            for tw in np.arange(len(t)):
+                peaks_per_window = detect_peaks(filtered_spec[:, tw], peakdet_th_in_mat)[0]
+                filtr = np.where(filtered_spec[peaks_per_window, tw] > -db_th)[0]
+                if len(filtr) == 0:
                     continue
+                elif len(filtr) > 0:
+                    [ls_to_fill.append([peaks_per_window[e], tw]) for e in filtr]
 
-                if c_db < -db_th:
-                    end_idx = step
-                    break
-                else:
-                    continue
+            abv_th_mat = np.vstack(ls_to_fill)
 
-            for bstep in np.arange(peak_f_idx[-1], peak_f_idx[-1]-steps, -1):  # walk from peak-f to call-start
-                c_db = filtered_spec[valid_peaks_p_w[bstep], bstep][0]
-
-                if len(c_db) == 0:
-                    continue
-
-                if c_db < -db_th:
-                    start_idx = bstep
-                    break
-                else:
-                    continue
-
-            if np.logical_or(start_idx == 0, end_idx == 0):
-                print('\nWARNING! There was a problem detecting call #%.0f.'
-                      'Proceeding analysis without including this call!\n' % i)
-                continue
-
-            call_boundaries = np.array([start_idx, end_idx])
+            # ToDo: make a linear regression with the peaks a few time slots left and right of peak_max. then walk
+            # ToDo: through the time-steps with a time and frequency threshold in order to define the call
+            # # Get call start and end
+            # steps = len(t)//5
+            # end_idx = 0
+            # start_idx = 0
+            #
+            # for step in np.arange(peak_f_idx[-1], peak_f_idx[-1]+steps):  # walk from peak-f to call-end
+            #     c_db = filtered_spec[valid_peaks_p_w[step], step][0]
+            #
+            #     if len(c_db) == 0:
+            #         continue
+            #
+            #     if c_db < -db_th:
+            #         end_idx = step
+            #         break
+            #     else:
+            #         continue
+            #
+            # for bstep in np.arange(peak_f_idx[-1], peak_f_idx[-1]-steps, -1):  # walk from peak-f to call-start
+            #     c_db = filtered_spec[valid_peaks_p_w[bstep], bstep][0]
+            #
+            #     if len(c_db) == 0:
+            #         continue
+            #
+            #     if c_db < -db_th:
+            #         start_idx = bstep
+            #         break
+            #     else:
+            #         continue
+            #
+            # if np.logical_or(start_idx == 0, end_idx == 0):
+            #     print('\nWARNING! There was a problem detecting call #%.0f.'
+            #           'Proceeding analysis without including this call!\n' % tw)
+            #     continue
+            #
+            # call_boundaries = np.array([start_idx, end_idx])
 
             fig, ax = bat.plot_spectrogram(filtered_spec, freqs_of_filtspec, t, ret_fig_and_ax=True)
 
-            ax.plot(t, freqs_of_filtspec[peaks_per_window] / 1000., 'o', color='gray', ms=8, mec='k', mew=2, alpha=.4)
-            ax.plot(t[call_boundaries], freqs_of_filtspec[peaks_per_window[call_boundaries]] / 1000., 'o', color='navy', ms=15,
-                    mec='k', mew=2, alpha=.7)
+            # ax.plot(t, freqs_of_filtspec[peaks_per_window] / 1000., 'o', color='gray', ms=8, mec='k', mew=2, alpha=.4)
+            # ax.plot(t[call_boundaries], freqs_of_filtspec[peaks_per_window[call_boundaries]] / 1000., 'o', color='navy', ms=15,
+            #         mec='k', mew=2, alpha=.7)
+            ax.plot(t[abv_th_mat[:, 1]], freqs_of_filtspec[abv_th_mat[:, 0]] / 1000., 'o', color='gray', ms=8, mec='k',
+                    mew=2, alpha=.4)
             ax.plot(t[peak_f_idx[-1]], freqs_of_filtspec[peak_f_idx[0]] / 1000., 'o', color='navy', ms=15,
                     mec='k', mew=2, alpha=.7)
 
@@ -283,7 +297,7 @@ if __name__ == '__main__':
             if not os.path.exists(save_path):
                 os.makedirs(save_path)
 
-            fig.savefig(save_path + 'fig_' + str(i).zfill(4) + '.pdf')
+            fig.savefig(save_path + 'fig_' + str(c_call).zfill(4) + '.pdf')
             plt.close(fig)
 
         print('\nDONE!')
