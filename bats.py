@@ -4,6 +4,7 @@ warnings.filterwarnings("ignore", category=RuntimeWarning)
 import numpy as np
 import matplotlib.pyplot as plt
 
+from sklearn.linear_model import LinearRegression as linreg
 from thunderfish.dataloader import load_data
 from thunderfish.powerspectrum import spectrogram, decibel
 from thunderfish.eventdetection import detect_peaks, percentile_threshold
@@ -185,7 +186,7 @@ if __name__ == '__main__':
                         for e in peaks]
 
         for c_call in np.arange(len(call_windows)):  # loop through the windows
-            s, f, t = spectrogram(call_windows[c_call], samplerate=bat.sampling_rate, fresolution=2 ** 12,
+            s, f, t = spectrogram(call_windows[c_call], samplerate=bat.sampling_rate, fresolution=2 ** 13,
                                   overlap_frac=0.99)  # Compute a high-res spectrogram of the window
 
             # set dynamic range
@@ -225,7 +226,7 @@ if __name__ == '__main__':
 
             # get peak frequency
             peak_f_idx = np.unravel_index(filtered_spec.argmax(),
-                                          filtered_spec.shape)  # get the peak-frequency coordinates
+                                          filtered_spec.shape)
 
             # peak detection in each time slot with th = abs([0dB - median(spec)] * 0.5)
             db_th = 16
@@ -245,6 +246,22 @@ if __name__ == '__main__':
 
             # ToDo: make a linear regression with the peaks a few time slots left and right of peak_max. then walk
             # ToDo: through the time-steps with a time and frequency threshold in order to define the call
+
+            steps_from_peakf = 1
+            a = np.unique(abv_th_mat[:, 0])
+            reg_window_ids = a[(np.where(a == peak_f_idx[0]
+                                         )[0][0] - steps_from_peakf): (np.where(a == peak_f_idx[0]
+                                                                                      )[0][0]+steps_from_peakf)+1]
+            strt_idx = np.where(abv_th_mat == reg_window_ids[-1])[0][0]
+            end_idx = np.where(abv_th_mat == reg_window_ids[0])[0][-1]
+
+            reg_times = t[abv_th_mat[strt_idx:end_idx+1][:, 1]]
+            reg_times = reg_times.reshape(-1, 1)
+            reg_freqs = freqs_of_filtspec[abv_th_mat[strt_idx:end_idx+1][:, 0]]
+
+            regressor = linreg()
+            regressor.fit(reg_times, reg_freqs)
+
             # # Get call start and end
             # steps = len(t)//5
             # end_idx = 0
@@ -291,13 +308,19 @@ if __name__ == '__main__':
             ax.plot(t[peak_f_idx[-1]], freqs_of_filtspec[peak_f_idx[0]] / 1000., 'o', color='navy', ms=15,
                     mec='k', mew=2, alpha=.7)
 
-            import os
-            save_path = '../../data/temp_batspy/' + '/'.join(bat.file_path.split('/')[5:-1]) +\
-                        '/' + bat.file_name.split('.')[0] + '/'
-            if not os.path.exists(save_path):
-                os.makedirs(save_path)
+            ax.plot(t, regressor.predict(t.reshape(-1, 1))/1000., '--k', lw=2, alpha=0.7)
 
-            fig.savefig(save_path + 'fig_' + str(c_call).zfill(4) + '.pdf')
-            plt.close(fig)
+            if c_call == 60:
+                embed()
+                quit()
 
-        print('\nDONE!')
+            # import os
+            # save_path = '../../data/temp_batspy/' + '/'.join(bat.file_path.split('/')[5:-1]) +\
+            #             '/' + bat.file_name.split('.')[0] + '/'
+            # if not os.path.exists(save_path):
+            #     os.makedirs(save_path)
+            #
+            # fig.savefig(save_path + 'fig_' + str(c_call).zfill(4) + '.pdf')
+            # plt.close(fig)
+        #
+        # print('\nDONE!')
