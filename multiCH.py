@@ -59,7 +59,7 @@ def plot_multiCH_spectrogram(specs_matrix, time_arr, freq_arr, pk_idxs, all_ch_p
     pass
 
 
-def get_calls_across_channels(all_ch_filenames, run_window_width=0.2, step_quotient=4, ch_jitter_th=0.005,
+def get_calls_across_channels(all_ch_filenames, run_window_width=0.05, step_quotient=10, ch_jitter_th=0.005,
                               f_res=2**9, overlap=0.7, dr=70, plot_spec=False, debug_plot=False):
     """
 
