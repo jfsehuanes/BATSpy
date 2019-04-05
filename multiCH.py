@@ -161,11 +161,12 @@ def get_calls_across_channels(all_ch_filenames, run_window_width=0.2, step_quoti
         plot_multiCH_spectrogram(specs, spec_time, spec_freq, pk_arrays, call_times, recs_info, dyn_range=dr)
 
     if debug_plot:  # plot the normed powers for debugging
+        fig, ax = plt.subplots()
         colors = ['purple', 'cornflowerblue', 'forestgreen', 'darkred']
         for i in np.arange(len(specs)):
-            plt.plot(spec_time, norm_pow[i], color=colors[i], alpha=.8)
-            plt.plot(spec_time[pk_arrays[i]], np.ones(len(pk_arrays[i])) * 1 + 1 * i, 'o', ms=7, color=colors[i],
+            ax.plot(spec_time, norm_pow[i], color=colors[i], alpha=.8)
+            ax.plot(spec_time[pk_arrays[i]], np.ones(len(pk_arrays[i])) * 1 + 1 * i, 'o', ms=7, color=colors[i],
                      alpha=.8, mec='k', mew=3)
-        plt.plot(call_times, np.ones(len(call_times)) * 6, 'o', ms=7, color='gray', alpha=.8, mec='k', mew=3)
+        ax.plot(call_times, np.ones(len(call_times)) * 6, 'o', ms=7, color='gray', alpha=.8, mec='k', mew=3)
 
     return call_times

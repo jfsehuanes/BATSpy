@@ -150,19 +150,29 @@ if __name__ == '__main__':
         # Get all the channels corresponding to the input file
         all_recs = get_all_ch(recording)
         # Get the calls
-        calls = get_calls_across_channels(all_recs, plot_spec=True)
+        calls = get_calls_across_channels(all_recs, run_window_width=0.05, step_quotient=10, plot_spec=True)
 
         # Compute the Pulse-Intervals:
         diff = np.diff(calls)
-        med = np.median(diff)
+
+        bout_th = np.median(diff)*3
+        bout_ids = np.where(diff > bout_th)[0]
+        bout_ranges = [[bout_ids[e], bout_ids[e+1]] for e in np.arange(len(bout_ids)-1)]  # bout ranges without boundaries
+
+        bout_ranges = np.vstack(([0, bout_ids[0]], bout_ranges, [bout_ids[-1], len(diff)]))  # boundaries inserted
+        [np.mean(diff[e[0]: e[1]]) for e in bout_ranges if len(diff[e[0]: e[1]]) > 10]  # Don't know what to do with the mean!
+        embed()
+        quit()
 
         # # ToDo: Need to put the diff thing in a new function.
-        # inch_factor = 2.54
-        # fs = 14
-        # fig, ax = plt.subplots(figsize=(50. / inch_factor, 25. / inch_factor))
-        #
-        # ax.plot(calls[:-1], diff, 'o-', lw=2)
-        # ax.plot([calls[0], calls[-1]], [med, med], '--k')
+        inch_factor = 2.54
+        fs = 14
+        fig, ax = plt.subplots(figsize=(50. / inch_factor, 25. / inch_factor))
+
+        ax.plot(calls[:-1], diff, 'o-', lw=2)
+
+        for i in bout_ranges:
+            ax.plot([calls[i[0]], calls[i[1]]], [.4, .4], '--')
         plt.show()
         quit()
 
