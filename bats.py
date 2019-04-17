@@ -3,6 +3,7 @@ warnings.filterwarnings("ignore", category=RuntimeWarning)
 
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.mlab as mlab
 
 from sklearn.linear_model import LinearRegression as linreg
 from thunderfish.dataloader import load_data
@@ -82,6 +83,7 @@ class Batspy:
         im = ax.imshow(spec_mat, cmap='jet',
                        extent=[t_arr[0], t_arr[-1],
                                int(f_arr[0])/hz_fac, int(f_arr[-1])/hz_fac],  # divide by 1000 for kHz
+                       vmin=-100.0, vmax=-50.0,
                        aspect='auto', origin='lower', alpha=0.7)
 
         cb = fig.colorbar(im)
@@ -159,14 +161,14 @@ if __name__ == '__main__':
 
         plt.show()
 
-
     # Analyze SingleChannel
     elif rec_type == 's':
 
         from helper_functions import extract_peak_and_th_crossings_from_cumhist
+        # ToDo change fresolution to NNFT!!!
         bat = Batspy(recording, f_resolution=2**9, overlap_frac=.70, dynamic_range=70)  # 2^7 = 128
         bat.compute_spectrogram()
-        average_power, peaks, _ = bat.detect_calls(strict_th=True, plot_in_spec=False)
+        average_power, peaks, _ = bat.detect_calls(strict_th=False, plot_in_spec=False)
         # ToDo: Make a better noise analysis and adapt the call-feature-detection-thresholds, so that this also works
         # ToDo: when strict_th=False!
 
@@ -180,23 +182,57 @@ if __name__ == '__main__':
                         for e in peaks]
 
         for c_call in np.arange(len(call_windows)):  # loop through the windows
-            s, f, t = spectrogram(call_windows[c_call], samplerate=bat.sampling_rate, fresolution=2 ** 13,
-                                  overlap_frac=0.99)  # Compute a high-res spectrogram of the window
+            nfft = 2 ** 8
+            s, f, t = mlab.specgram(call_windows[c_call], Fs=bat.sampling_rate, NFFT=nfft, noverlap=int(0.8 * nfft))  # Compute a high-res spectrogram of the window
 
-            # set dynamic range
-            single_spec_dyn_range = 90
             dec_spec = decibel(s)
-            # define maximum; use nanmax, because decibel function may contain NaN values
-            ampl_max = np.nanmax(dec_spec)
-            dec_spec -= ampl_max + 1e-20  # subtract maximum so that the maximum value is set to lim x--> -0
-            dec_spec[dec_spec < -single_spec_dyn_range] = -single_spec_dyn_range
 
-            # Extract noisy artifacts
+            call_freq_range = (50000, 250000)
+            filtered_spec = dec_spec[np.logical_and(f > call_freq_range[0], f < call_freq_range[1])]
+            freqs_of_filtspec = np.linspace(call_freq_range[0], call_freq_range[-1], np.shape(filtered_spec)[0])
+
+            # measure noise floor
+            noise_floor = np.max(filtered_spec[:, :10])
+            lowest_decibel = noise_floor
+
+            #filtered_spec[filtered_spec < lowest_decibel] = lowest_decibel
+
+            fig, ax = bat.plot_spectrogram(filtered_spec, freqs_of_filtspec, t, ret_fig_and_ax=True)
+
+            # get peak frequency
+            peak_f_idx = np.unravel_index(filtered_spec.argmax(),
+                                          filtered_spec.shape)
+
+            # calculate the frequency distance between the previous and current pi.
+            # join previous pi to the current pi with minimum distance. That way we join all the maxima
+            # corresponding to the main harmonic of the call. Next step should get rid of noise artifacts
+            # and find harmonics.
+
+            db_th = 10.0
+            for ti in range(len(t)):  # instead of looping through the whole call window, I should start with the peak and then left and right from it until I don't find any more peaks!
+                
+                pi, _ = detect_peaks(filtered_spec[:, ti], db_th)
+                pi = pi[filtered_spec[pi, ti] > lowest_decibel]
+
+
+                # peak_freq = freqs_of_filtspec[pi]
+                # mi = np.argmin(np.abs((peak_freq - f_max)))
+                # peak_freq[mi]
+                ax.plot(np.zeros(len(pi))+t[ti], freqs_of_filtspec[pi]/1000.0, '.k', ms=20.0)
+
+            if c_call == 10:
+                embed()
+                quit()
+
+            continue
+
+
+            '''# Extract noisy artifacts
             noise_wlength = len(t) // 5
             blanc_spec = np.hstack((dec_spec[:, :noise_wlength], dec_spec[:, -noise_wlength:]))
             noise_psd = np.mean(blanc_spec, axis=1)
 
-            th_noise = percentile_threshold(noise_psd, th_factor=0.3, percentile=1.0)
+            th_noise = percentile_threshold(noise_psd, thresh_fac=0.3, percentile=1.0)
 
             noise_pks, noise_tr = detect_peaks(noise_psd, threshold=th_noise)  # th is in dB
             # Kill-all peaks < x dB of max(noise_psd(noise_pk))
@@ -212,50 +248,96 @@ if __name__ == '__main__':
             adj_noisefreq_slots = np.where(f - f[1] <= adjacent_th)[0][-1] - 1
             freq_ids_to_attn = np.unique([[e - adj_noisefreq_slots, e, e + adj_noisefreq_slots] \
                                           for e in noise_pks if e + adj_noisefreq_slots < len(f)])
-            dec_spec[freq_ids_to_attn, :] = dec_spec[freq_ids_to_attn, :] - noise_attenuation
+            dec_spec[freq_ids_to_attn, :] = dec_spec[freq_ids_to_attn, :] - noise_attenuation'''
 
-            call_freq_range = (50000, 250000)
-            filtered_spec = dec_spec[np.logical_and(f > call_freq_range[0], f < call_freq_range[1])]
-            freqs_of_filtspec = np.linspace(call_freq_range[0], call_freq_range[-1], np.shape(filtered_spec)[0])
+            from scipy.stats.mstats import gmean
+            amu = np.mean(np.abs(filtered_spec), axis=0)
+            gmu = gmean(np.abs(filtered_spec), axis=0)
 
-            # get peak frequency
-            peak_f_idx = np.unravel_index(filtered_spec.argmax(),
-                                          filtered_spec.shape)
+            tonality = 1 - gmu/amu
 
-            # peak detection in each time slot with th = abs([0dB - median(spec)] * 0.5)
-            db_th = 16
-            peakdet_th_in_mat = np.abs(np.max(blanc_spec) - np.median(blanc_spec) * 0.5)
+            # ton_th = 0.02  # tonality threshold
+            ton_th = np.percentile(tonality, 75)  # tonality threshold
 
-            # discard all peaks of previous step where peak < th
-            ls_to_fill = []
-            for tw in np.arange(len(t)):
-                peaks_per_window = detect_peaks(filtered_spec[:, tw], peakdet_th_in_mat)[0]
-                filtr = np.where(filtered_spec[peaks_per_window, tw] > -db_th)[0]
-                if len(filtr) == 0:
+            # get indices of call begin and end
+            c_beg = peak_f_idx[1] - np.where(tonality[:peak_f_idx[1]][::-1] < ton_th)[0][0]
+            c_end = np.where(tonality[peak_f_idx[1]:] < ton_th)[0][0] + peak_f_idx[1]
+
+            # get indices of begin and end frequencies
+            f_beg = np.argmax(filtered_spec[:, c_beg])
+            f_end = np.argmax(filtered_spec[:, c_end])
+
+            # peak-detector throughout the call in order to detect harmonics
+            db_th = 20.
+            absolut_th = -18
+
+            # first define how many harmonics are present and create a empty lists accordingly
+            p, _ = detect_peaks(filtered_spec[:, peak_f_idx[1]], db_th)
+            cf_mat = [[], []]
+
+            # loop from peak-freq to call-end
+            # ToDo: Maybe set call end and call beginning boundaries to +-15ms from peak-freq
+            rightsweep = np.arange(peak_f_idx[1], c_end+1)
+            leftsweep = np.arange(peak_f_idx[1]-1, c_beg-1, -1)
+            approx_call_ids = np.concatenate((leftsweep, rightsweep))
+
+            for ti in approx_call_ids:
+                cp, _ = detect_peaks(filtered_spec[:, ti], db_th)
+                valid_pks_ids = np.where(filtered_spec[:, ti][cp] > absolut_th)[0]
+
+                if len(valid_pks_ids) == 0:
                     continue
-                elif len(filtr) > 0:
-                    [ls_to_fill.append([peaks_per_window[e], tw]) for e in filtr]
+                else:
+                    cf_mat[0].append(ti)
+                    cf_mat[1].append(cp[valid_pks_ids])
 
-            abv_th_mat = np.vstack(ls_to_fill)
+                # if len(cp) == 3:
+                #     fig1, ax1 = plt.subplots()
+                #     ax1.plot(freqs_of_filtspec, filtered_spec[:, r])
 
-            # ToDo: make a linear regression with the peaks a few time slots left and right of peak_max. then walk
-            # ToDo: through the time-steps with a time and frequency threshold in order to define the call
+                # for harm in np.arange(len(cp)):
+                #     cf_lists[harm] = cp[harm]
 
-            steps_from_peakf = 1
-            a = np.unique(abv_th_mat[:, 0])
-            reg_window_ids = a[(np.where(a == peak_f_idx[0]
-                                         )[0][0] - steps_from_peakf): (np.where(a == peak_f_idx[0]
-                                                                                      )[0][0]+steps_from_peakf)+1]
-            strt_idx = np.where(abv_th_mat == reg_window_ids[-1])[0][0]
-            end_idx = np.where(abv_th_mat == reg_window_ids[0])[0][-1]
 
-            reg_times = t[abv_th_mat[strt_idx:end_idx+1][:, 1]]
-            reg_times = reg_times.reshape(-1, 1)
-            reg_freqs = freqs_of_filtspec[abv_th_mat[strt_idx:end_idx+1][:, 0]]
+            # fig1, ax1 = plt.subplots()
+            # ax1.plot(t, tonality, 'o')
+            # ax1.set_title('call # %i' % c_call)
+            # ax1.plot([t[0], t[-1]], [ton_th, ton_th], '--k')
 
-            regressor = linreg()
-            regressor.fit(reg_times, reg_freqs)
-
+            # # peak detection in each time slot with th = abs([0dB - median(spec)] * 0.5)
+            # db_th = 16
+            # peakdet_th_in_mat = np.abs(np.max(blanc_spec) - np.median(blanc_spec) * 0.5)
+            #
+            # # discard all peaks of previous step where peak < th
+            # ls_to_fill = []
+            # for tw in np.arange(len(t)):
+            #     peaks_per_window = detect_peaks(filtered_spec[:, tw], peakdet_th_in_mat)[0]
+            #     filtr = np.where(filtered_spec[peaks_per_window, tw] > -db_th)[0]
+            #     if len(filtr) == 0:
+            #         continue
+            #     elif len(filtr) > 0:
+            #         [ls_to_fill.append([peaks_per_window[e], tw]) for e in filtr]
+            #
+            # abv_th_mat = np.vstack(ls_to_fill)
+            #
+            # # ToDo: make a linear regression with the peaks a few time slots left and right of peak_max. then walk
+            # # ToDo: through the time-steps with a time and frequency threshold in order to define the call
+            #
+            # steps_from_peakf = 1
+            # a = np.unique(abv_th_mat[:, 0])
+            # reg_window_ids = a[(np.where(a == peak_f_idx[0]
+            #                              )[0][0] - steps_from_peakf): (np.where(a == peak_f_idx[0]
+            #                                                                           )[0][0]+steps_from_peakf)+1]
+            # strt_idx = np.where(abv_th_mat == reg_window_ids[-1])[0][0]
+            # end_idx = np.where(abv_th_mat == reg_window_ids[0])[0][-1]
+            #
+            # reg_times = t[abv_th_mat[strt_idx:end_idx+1][:, 1]]
+            # reg_times = reg_times.reshape(-1, 1)
+            # reg_freqs = freqs_of_filtspec[abv_th_mat[strt_idx:end_idx+1][:, 0]]
+            #
+            # regressor = linreg()
+            # regressor.fit(reg_times, reg_freqs)
+            #
             # # Get call start and end
             # steps = len(t)//5
             # end_idx = 0
@@ -293,18 +375,24 @@ if __name__ == '__main__':
             # call_boundaries = np.array([start_idx, end_idx])
 
             fig, ax = bat.plot_spectrogram(filtered_spec, freqs_of_filtspec, t, ret_fig_and_ax=True)
+            for i in np.arange(len(cf_mat[0])):
+                ax.plot(t[[cf_mat[0][i]] * len(cf_mat[1][i])], freqs_of_filtspec[cf_mat[1][i]] / 1000., '.k', ms=10,
+                        alpha=0.6)
+
+            # ax.plot([t[c_beg], t[c_end]], np.array([freqs_of_filtspec[f_beg], freqs_of_filtspec[f_end]]) / 1000., '.k', alpha=0.8)
+            ax.set_title('call # %i' % c_call)
 
             # ax.plot(t, freqs_of_filtspec[peaks_per_window] / 1000., 'o', color='gray', ms=8, mec='k', mew=2, alpha=.4)
             # ax.plot(t[call_boundaries], freqs_of_filtspec[peaks_per_window[call_boundaries]] / 1000., 'o', color='navy', ms=15,
             #         mec='k', mew=2, alpha=.7)
-            ax.plot(t[abv_th_mat[:, 1]], freqs_of_filtspec[abv_th_mat[:, 0]] / 1000., 'o', color='gray', ms=8, mec='k',
-                    mew=2, alpha=.4)
-            ax.plot(t[peak_f_idx[-1]], freqs_of_filtspec[peak_f_idx[0]] / 1000., 'o', color='navy', ms=15,
-                    mec='k', mew=2, alpha=.7)
+            # ax.plot(t[abv_th_mat[:, 1]], freqs_of_filtspec[abv_th_mat[:, 0]] / 1000., 'o', color='gray', ms=8, mec='k',
+            #         mew=2, alpha=.4)
+            # ax.plot(t[peak_f_idx[-1]], freqs_of_filtspec[peak_f_idx[0]] / 1000., 'o', color='navy', ms=15,
+            #         mec='k', mew=2, alpha=.7)
+            #
+            # ax.plot(t, regressor.predict(t.reshape(-1, 1))/1000., '--k', lw=2, alpha=0.7)
 
-            ax.plot(t, regressor.predict(t.reshape(-1, 1))/1000., '--k', lw=2, alpha=0.7)
-
-            if c_call == 60:
+            if c_call == 50:
                 embed()
                 quit()
 
