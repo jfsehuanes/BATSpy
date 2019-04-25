@@ -98,7 +98,7 @@ def get_calls_across_channels(all_ch_filenames, run_window_width=0.05, step_quot
     pk_arrays = []
     specs = []
 
-    for rec_idx in np.arange(len(all_ch_filenames)):
+    for rec_idx in range(len(all_ch_filenames)):
         print('\nAnalyzing Channel ' + str(rec_idx + 1) + ' of ' + str(len(all_ch_filenames)) + '...')
         bat = Batspy(all_ch_filenames[rec_idx], f_resolution=f_res, overlap_frac=overlap, dynamic_range=dr)
         bat.compute_spectrogram()
@@ -126,6 +126,7 @@ def get_calls_across_channels(all_ch_filenames, run_window_width=0.05, step_quot
 
     channel_sequence = np.ones(len(steps))
     call_times = []
+    callChannel = []
 
     for enu, step in enumerate(steps):
 
@@ -144,18 +145,22 @@ def get_calls_across_channels(all_ch_filenames, run_window_width=0.05, step_quot
             # Then the channel with the highest mean is chosen. This is achieved with nanargmax,
             # which output ranges from 0 - #_of_ch (i.e. the channels)
             channel_w_highest_pow = np.nanargmax([np.mean(norm_pow[e][win_peak_idxs[e]])
-                                                  for e in np.arange(len(norm_pow))])
+                                                  for e in range(len(norm_pow))])
             channel_sequence[enu] = channel_w_highest_pow
-            call_times.append(spec_time[win_peak_idxs[channel_w_highest_pow]])
+            c_callTimes = spec_time[win_peak_idxs[channel_w_highest_pow]]
+            call_times.append(c_callTimes)
+            callChannel.append(np.array([channel_w_highest_pow for m in range(len(c_callTimes))]))
 
     # Now there are double detections for the same call when transitioning from one channel to the other.
     # For this I need to make an average of the time call for the case with double detections.
 
-    call_times = np.unique(np.hstack(call_times))  # Use unique to remove same call detected in several windows
+    call_times, indi = np.unique(np.hstack(call_times), return_index=True)  # Use unique to remove same call detected in several windows
+    callChannel = np.hstack(callChannel)[indi]
     reps_idx = np.where(np.diff(call_times) <= ch_jitter_th)[0]  # array with repetition indices
     replacements = np.array([call_times[e] + (call_times[e + 1] - call_times[e]) / 2. for e in reps_idx])
     call_times[reps_idx] = replacements  # first replace with average
     call_times = np.delete(call_times, reps_idx + 1)  # then remove the extra call
+    callChannel = np.delete(callChannel, reps_idx + 1)
 
     if plot_spec:  # plot a spectrogram that includes all channels!
         plot_multiCH_spectrogram(specs, spec_time, spec_freq, pk_arrays, call_times, recs_info, dyn_range=dr)
@@ -166,7 +171,7 @@ def get_calls_across_channels(all_ch_filenames, run_window_width=0.05, step_quot
         for i in np.arange(len(specs)):
             ax.plot(spec_time, norm_pow[i], color=colors[i], alpha=.8)
             ax.plot(spec_time[pk_arrays[i]], np.ones(len(pk_arrays[i])) * 1 + 1 * i, 'o', ms=7, color=colors[i],
-                     alpha=.8, mec='k', mew=3)
+                    alpha=.8, mec='k', mew=3)
         ax.plot(call_times, np.ones(len(call_times)) * 6, 'o', ms=7, color='gray', alpha=.8, mec='k', mew=3)
 
-    return call_times
+    return call_times, callChannel

@@ -98,19 +98,14 @@ class Batspy:
         else:
             pass
 
-    def detect_calls(self, strict_th=False, det_range=(50000, 150000), plot_debug=False,
+    def detect_calls(self, det_range=(50000, 150000), plot_debug=False,
                      plot_in_spec=False, save_spec_w_calls=False):
 
         # Get an average over all frequency channels within detection range
         av_power = np.mean(self.spec_mat[np.logical_and(self.f > det_range[0], self.f < det_range[1])], axis=0)
 
-        if strict_th:  # either search for really good quality calls or else for just a rough detection
-            th = np.percentile(av_power, 99)
-        else:
-            th = np.min(av_power)  # THIS THRESHOLD ROCKS YOUR PANTS! for more detections, increase f_res. 2^7 or 2^8
-
-        # Fix cases where th <= 0
-        if th <= 0:
+        th = np.min(av_power)  # THIS THRESHOLD ROCKS YOUR PANTS! for more detections, increase f_res. 2^7 or 2^8
+        if th <= 0:  # Fix cases where th <= 0
             th = np.mean(av_power)
         peaks, troughs = detect_peaks(av_power, th)  # Use thunderfish's peak-trough algorithm
 
@@ -152,11 +147,15 @@ if __name__ == '__main__':
         # Get all the channels corresponding to the input file
         all_recs = get_all_ch(recording)
         # Get the calls
-        calls = get_calls_across_channels(all_recs, run_window_width=0.05, step_quotient=10, plot_spec=True)
+        calls, chOfCall = get_calls_across_channels(all_recs, run_window_width=0.05, step_quotient=10, plot_spec=True)
 
         # Compute the Pulse-Intervals:
         from call_intervals import get_CI_and_call_bouts, plot_call_bout_vs_CI
         bout_calls, bout_diffs = get_CI_and_call_bouts(calls)
+
+        embed()
+        quit()
+
         plot_call_bout_vs_CI(bout_calls, bout_diffs)
 
         plt.show()
@@ -164,13 +163,10 @@ if __name__ == '__main__':
     # Analyze SingleChannel
     elif rec_type == 's':
 
-        from helper_functions import extract_peak_and_th_crossings_from_cumhist
-        # ToDo change fresolution to NNFT!!!
+        # ToDo change fresolution to NFFT!!!
         bat = Batspy(recording, f_resolution=2**9, overlap_frac=.70, dynamic_range=70)  # 2^7 = 128
         bat.compute_spectrogram()
-        average_power, peaks, _ = bat.detect_calls(strict_th=False, plot_in_spec=False)
-        # ToDo: Make a better noise analysis and adapt the call-feature-detection-thresholds, so that this also works
-        # ToDo: when strict_th=False!
+        average_power, peaks, _ = bat.detect_calls(plot_in_spec=False)
 
         # Goal now is to create small windows for each call
         # make a time array with the sampling rate
@@ -180,6 +176,7 @@ if __name__ == '__main__':
         call_windows = [bat.recording_trace[np.logical_and(time >= bat.t[e]-window_width/2.,
                                                            time <= bat.t[e]+window_width/2.)]
                         for e in peaks]
+        call_dict = {'cb': [], 'ce': [], 'fb': [], 'fe': [], 'pf': [], 'call_number': []}
 
         for c_call in np.arange(len(call_windows)):  # loop through the windows
             nfft = 2 ** 8
@@ -192,7 +189,9 @@ if __name__ == '__main__':
             freqs_of_filtspec = np.linspace(call_freq_range[0], call_freq_range[-1], np.shape(filtered_spec)[0])
 
             # measure noise floor
-            noise_floor = np.max(filtered_spec[:, :10])
+            noiseEdge = int(np.floor(0.002 / np.diff(t)[0]))
+            noise_floor = np.max(np.hstack((filtered_spec[:, :noiseEdge], filtered_spec[:, -noiseEdge:]))) + 2
+
             lowest_decibel = noise_floor
 
             # get peak frequency
@@ -203,10 +202,10 @@ if __name__ == '__main__':
             left_from_peak = np.arange(peak_f_idx[1]-1, -1, -1, dtype=int)
             right_from_pk = np.arange(peak_f_idx[1]+1, len(t), dtype=int)
 
-            pre_call_trace = []
-            db_th = 20.0
-            f_tol_th = 15000  # in Hz
-            t_tol_th = 0.0004  # in s
+            mainHarmonicTrace = []
+            db_th = 12.0
+            f_tol_th = 40000  # in Hz
+            t_tol_th = 0.0012  # in s
 
             freq_tolerance = np.where(np.cumsum(np.diff(freqs_of_filtspec)) > f_tol_th)[0][0]
             time_tolerance = np.where(np.cumsum(np.diff(t)) > t_tol_th)[0][0]
@@ -214,7 +213,7 @@ if __name__ == '__main__':
             # first start from peak to right
             f_ref = peak_f_idx[0]
             t_ref = peak_f_idx[1]
-            pre_call_trace.append([peak_f_idx[0], peak_f_idx[1]])
+            mainHarmonicTrace.append([peak_f_idx[0], peak_f_idx[1]])
             for ri in right_from_pk:
                 pi, _ = detect_peaks(filtered_spec[:, ri], db_th)
                 pi = pi[filtered_spec[pi, ri] > lowest_decibel]
@@ -225,7 +224,7 @@ if __name__ == '__main__':
                             or f_ref - curr_f < 0:
                         continue
                     else:
-                        pre_call_trace.append([curr_f, ri])
+                        mainHarmonicTrace.append([curr_f, ri])
                         f_ref = curr_f
                         t_ref = ri
                 else:
@@ -244,31 +243,62 @@ if __name__ == '__main__':
                             or curr_f - f_ref < 0:
                         continue
                     else:
-                        pre_call_trace.insert(0, [curr_f, li])
+                        mainHarmonicTrace.insert(0, [curr_f, li])
                         f_ref = curr_f
                         t_ref = li
                 else:
                     continue
 
-            pre_call_trace = np.array(pre_call_trace)
+            mainHarmonicTrace = np.array(mainHarmonicTrace)
 
-            fig, ax = bat.plot_spectrogram(filtered_spec, freqs_of_filtspec, t, ret_fig_and_ax=True)
-            ax.plot(t[pre_call_trace[:, 1]], freqs_of_filtspec[pre_call_trace[:, 0]]/1000.,
-                    'o', ms=12, color='None', mew=3, mec='k', alpha=0.7)
-            ax.plot(t[peak_f_idx[1]], freqs_of_filtspec[peak_f_idx[0]] / 1000, 'o', ms=15, color='None', mew=4, mec='purple', alpha=0.8)
-            ax.set_title('call # %i' % c_call)
+            if np.abs(noise_floor - filtered_spec[peak_f_idx]) > db_th:
+                call_dict['call_number'].append(c_call)
+                call_dict['cb'].append(t[mainHarmonicTrace[0][1]])
+                call_dict['ce'].append(t[mainHarmonicTrace[-1][1]])
+                call_dict['fb'].append(freqs_of_filtspec[mainHarmonicTrace[0][0]])
+                call_dict['fe'].append(freqs_of_filtspec[mainHarmonicTrace[-1][0]])
+                call_dict['pf'].append(freqs_of_filtspec[peak_f_idx[0]])
 
-            if c_call == 60:
-                embed()
-                quit()
-
-            # import os
-            # save_path = '../../data/temp_batspy/' + '/'.join(bat.file_path.split('/')[5:-1]) +\
-            #             '/' + bat.file_name.split('.')[0] + '/'
-            # if not os.path.exists(save_path):
-            #     os.makedirs(save_path)
+            # Avoid adding artifact detections at the end by not taking into account detections
+            # with slope=0 at beginning or end
+            # slope = np.array([(mainHarmonicTrace[i + 1][0] - mainHarmonicTrace[i][0]) /
+            #                   (mainHarmonicTrace[i + 1][1] - mainHarmonicTrace[i][1]) for i in range(len(mainHarmonicTrace) - 1)])
             #
-            # fig.savefig(save_path + 'fig_' + str(c_call).zfill(4) + '.pdf')
-            # plt.close(fig)
-        #
-        # print('\nDONE!')
+            # import re
+            # slope0 = slope == 0.
+            # callSlopeIsCero = ''.join(map(str, slope0.astype(int)))
+            # artifStr = r'1{2,}'
+            # artifDetections = [m.span() for m in re.finditer(artifStr, callSlopeIsCero)]
+            #
+            # if len(artifDetections) == 0:
+            #     callTrace = pre_call_trace
+            #     pass
+            # elif len(artifDetections) == 1:
+            #     if artifDetections[0][1] + pre_call_trace[0][1] < peak_f_idx[1]:  # add pre_call_trace[0][1] to get the right index
+            #         callTrace = pre_call_trace[artifDetections[0][1]+1:]
+            #     else:
+            #         callTrace = pre_call_trace[:artifDetections[0][0]-1]
+            # else:
+            #     valDet = []
+            #     for ad in artifDetections:
+            #
+            #     callTrace = pre_call_trace[artifDetections[0][1]+1:artifDetections[1][0]-1]
+            #
+                # fig, ax = bat.plot_spectrogram(filtered_spec, freqs_of_filtspec, t, ret_fig_and_ax=True)
+                # ax.plot(t[mainHarmonicTrace[:, 1]], freqs_of_filtspec[mainHarmonicTrace[:, 0]]/1000.,
+                #         'o', ms=12, color='None', mew=3, mec='k', alpha=0.7)
+                # ax.plot(t[peak_f_idx[1]], freqs_of_filtspec[peak_f_idx[0]] / 1000, 'o', ms=15, color='None', mew=4, mec='purple', alpha=0.8)
+                # ax.set_title('call # %i' % c_call)
+                #
+                # import os
+                # save_path = '../../data/temp_batspy/' + '/'.join(bat.file_path.split('/')[5:-1]) +\
+                #             '/' + bat.file_name.split('.')[0] + '/'
+                # if not os.path.exists(save_path):
+                #     os.makedirs(save_path)
+                #
+                # fig.savefig(save_path + 'fig_' + str(c_call).zfill(4) + '.pdf')
+                # plt.close(fig)
+
+        embed()
+        quit()
+        print('\nDONE!')
