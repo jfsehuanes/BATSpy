@@ -371,31 +371,6 @@ if __name__ == '__main__':
                 call_dict['fe'].append(freqs_of_filtspec[mainHarmonicTrace[-1][0]])
                 call_dict['pf'].append(freqs_of_filtspec[peak_f_idx[0]])
 
-            # Avoid adding artifact detections at the end by not taking into account detections
-            # with slope=0 at beginning or end
-            # slope = np.array([(mainHarmonicTrace[i + 1][0] - mainHarmonicTrace[i][0]) /
-            #                   (mainHarmonicTrace[i + 1][1] - mainHarmonicTrace[i][1]) for i in range(len(mainHarmonicTrace) - 1)])
-            #
-            # import re
-            # slope0 = slope == 0.
-            # callSlopeIsCero = ''.join(map(str, slope0.astype(int)))
-            # artifStr = r'1{2,}'
-            # artifDetections = [m.span() for m in re.finditer(artifStr, callSlopeIsCero)]
-            #
-            # if len(artifDetections) == 0:
-            #     callTrace = pre_call_trace
-            #     pass
-            # elif len(artifDetections) == 1:
-            #     if artifDetections[0][1] + pre_call_trace[0][1] < peak_f_idx[1]:  # add pre_call_trace[0][1] to get the right index
-            #         callTrace = pre_call_trace[artifDetections[0][1]+1:]
-            #     else:
-            #         callTrace = pre_call_trace[:artifDetections[0][0]-1]
-            # else:
-            #     valDet = []
-            #     for ad in artifDetections:
-            #
-            #     callTrace = pre_call_trace[artifDetections[0][1]+1:artifDetections[1][0]-1]
-            #
                 if (t[mainHarmonicTrace[-1][1]] - t[mainHarmonicTrace[0][1]]) * 1000. > 2.5:
                     fig, ax = bat.plot_spectrogram(filtered_spec, freqs_of_filtspec, t, ret_fig_and_ax=True)
                     ax.plot(t[mainHarmonicTrace[:, 1]], freqs_of_filtspec[mainHarmonicTrace[:, 0]]/1000.,

@@ -182,12 +182,22 @@ def plot_call_parameter_distributions(cp_dict, showit=True):
     if type(cp_dict[list(cp_dict.keys())[0]]) == list:
         cp_dict = {e: np.array(cp_dict[e]) for e in cp_dict.keys()}
 
-    fig, ax1 = plt.subplots()
+    inch_factor = 2.54
+    fs = 14
+    cfb = 'cornflowerblue'
+    fig, ax1 = plt.subplots(figsize=(20. / inch_factor, 15. / inch_factor))
     ax2 = ax1.twinx()
 
-    vp1 = ax1.violinplot((cp_dict['ce'] - cp_dict['cb']) * 1000., [1], showextrema=False, widths=.8)
-    vp2 = ax2.violinplot([cp_dict['fb'] / 1000., cp_dict['pf'] / 1000., cp_dict['fe'] / 1000.],
-                         [2, 3, 4], showextrema=False, widths=.8)
+    cd = (cp_dict['ce'] - cp_dict['cb']) * 1000.  # in ms
+    fb = cp_dict['fb'] / 1000.  # in kHz
+    pf = cp_dict['pf'] / 1000.  # in kHz
+    fe = cp_dict['fe'] / 1000.  # in kHz
+
+    vp1 = ax1.violinplot([cd], [1], showextrema=False, widths=.8)
+    vp2 = ax2.violinplot([fb, pf, fe], [2, 3, 4], showextrema=False, widths=.8)
+
+    ax1.plot([1], [np.median(cd)], '.', color='none', mec='k', mew=2, ms=15)
+    ax2.plot([2, 3, 4], [np.median(e) for e in [fb, pf, fe]], '.', color='none', mec='k', mew=2, ms=15)
 
     for pc in vp2['bodies']:
         pc.set_facecolor('gray')
@@ -195,18 +205,33 @@ def plot_call_parameter_distributions(cp_dict, showit=True):
         pc.set_alpha(0.8)
 
     for pc2 in vp1['bodies']:
-        pc2.set_facecolor('cornflowerblue')
+        pc2.set_facecolor(cfb)
         pc2.set_edgecolor('black')
         pc2.set_alpha(0.8)
 
+    # embed()
+    # quit()
+
     ax1.set_xticks([1, 2, 3, 4])
-    ax1.set_xticklabels(['Call Duration', 'Fmax', 'Fpk', 'Fmin'])
-    ax1.set_ylabel('Duration [ms]')
-    ax2.set_ylabel('Frequency [kHz]')
-    ax2.set_title('n = %.i' % len(cp_dict['call_number']))
+    ax1.set_xticklabels(['Call Duration', 'Fmax', 'Fpk', 'Fmin'], fontsize=fs)
+    ax1.set_ylabel('Duration [ms]', fontsize=fs)
+    ax2.set_ylabel('Frequency [kHz]', fontsize=fs)
+    ax2.set_title('n = %.i' % len(cp_dict['call_number']), fontsize=fs)
 
     ax1.set_yticks(np.arange(0., 3.5, 0.5))
     ax2.set_yticks(np.arange(60., 220., 20))
+
+    for ax in [ax1, ax2]:
+        ax.tick_params(labelsize=fs-3)
+
+    # color the first y axis
+    ax1.spines['left'].set_color(cfb)
+    ax2.spines['left'].set_color(cfb)
+    ax1.spines['left'].set_alpha(1)
+    ax2.spines['left'].set_alpha(1)
+    ax1.yaxis.label.set_color(cfb)
+    ax1.yaxis.label.set_alpha(1)
+    ax1.tick_params(axis='y', colors=cfb)
 
     if showit:
         plt.show()
