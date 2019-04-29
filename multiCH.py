@@ -175,3 +175,40 @@ def get_calls_across_channels(all_ch_filenames, run_window_width=0.05, step_quot
         ax.plot(call_times, np.ones(len(call_times)) * 6, 'o', ms=7, color='gray', alpha=.8, mec='k', mew=3)
 
     return call_times, callChannel
+
+
+def plot_call_parameter_distributions(cp_dict, showit=True):
+
+    if type(cp_dict[list(cp_dict.keys())[0]]) == list:
+        cp_dict = {e: np.array(cp_dict[e]) for e in cp_dict.keys()}
+
+    fig, ax1 = plt.subplots()
+    ax2 = ax1.twinx()
+
+    vp1 = ax1.violinplot((cp_dict['ce'] - cp_dict['cb']) * 1000., [1], showextrema=False, widths=.8)
+    vp2 = ax2.violinplot([cp_dict['fb'] / 1000., cp_dict['pf'] / 1000., cp_dict['fe'] / 1000.],
+                         [2, 3, 4], showextrema=False, widths=.8)
+
+    for pc in vp2['bodies']:
+        pc.set_facecolor('gray')
+        pc.set_edgecolor('black')
+        pc.set_alpha(0.8)
+
+    for pc2 in vp1['bodies']:
+        pc2.set_facecolor('cornflowerblue')
+        pc2.set_edgecolor('black')
+        pc2.set_alpha(0.8)
+
+    ax1.set_xticks([1, 2, 3, 4])
+    ax1.set_xticklabels(['Call Duration', 'Fmax', 'Fpk', 'Fmin'])
+    ax1.set_ylabel('Duration [ms]')
+    ax2.set_ylabel('Frequency [kHz]')
+    ax2.set_title('n = %.i' % len(cp_dict['call_number']))
+
+    ax1.set_yticks(np.arange(0., 3.5, 0.5))
+    ax2.set_yticks(np.arange(60., 220., 20))
+
+    if showit:
+        plt.show()
+
+    pass
