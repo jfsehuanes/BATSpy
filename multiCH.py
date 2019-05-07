@@ -27,7 +27,7 @@ def plot_multiCH_spectrogram(specs_matrix, time_arr, freq_arr, pk_idxs, all_ch_p
         hz_fac = 1
 
     inch_factor = 2.54
-    fs = 14
+    fs = 18
     fig, ax = plt.subplots(nrows=len(specs_matrix), figsize=(50. / inch_factor, 25. / inch_factor),
                            sharex=True, sharey=True)
     colors = ['purple', 'cornflowerblue', 'forestgreen', 'darkred']
@@ -45,6 +45,7 @@ def plot_multiCH_spectrogram(specs_matrix, time_arr, freq_arr, pk_idxs, all_ch_p
                    alpha=.8, mec='k', mew=1.5)
         ax[i].plot(all_ch_peak_times, np.ones(len(all_ch_peak_times)) * 150, 'o', ms=7, color='gray',
                    alpha=.8, mec='k', mew=1.5)
+        ax[i].tick_params(labelsize=fs-1)
     # ToDo: Plot the colorbar!
     # cb_ticks = np.arange(0, dynamic_range + 10, 10)
     # cb = fig.colorbar(im)
