@@ -4,6 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from bats import Batspy
+from thunderfish.powerspectrum import decibel
 
 from IPython import embed
 
@@ -19,7 +20,7 @@ def get_all_ch(single_filename):
 
 
 def plot_multiCH_spectrogram(specs_matrix, time_arr, freq_arr, pk_idxs, all_ch_peak_times,
-                             filepath, dyn_range=70, in_kHz=True):
+                             filepath, dyn_range=70, in_kHz=True, adjust_to_max_db=True):
 
     if in_kHz:
         hz_fac = 1000
@@ -34,12 +35,26 @@ def plot_multiCH_spectrogram(specs_matrix, time_arr, freq_arr, pk_idxs, all_ch_p
 
     for i in np.arange(len(specs_matrix)):
 
-        # Reduce the noise by subtracting the mean power of the spectrum plus 5dB
-        med = np.median(specs_matrix[i]) + 5
-        specs_matrix[i][specs_matrix[i] <= med] = -dyn_range
+        mat = specs_matrix[i]
 
-        im = ax[i].imshow(specs_matrix[i], cmap='jet',
-                          extent=[time_arr[0], time_arr[-1], int(freq_arr[0])/hz_fac, int(freq_arr[-1])/hz_fac],
+        if adjust_to_max_db:
+            # set dynamic range
+            dec_spec = decibel(mat)
+            ampl_max = np.nanmax(
+                dec_spec)  # define maximum; use nanmax, because decibel function may contain NaN values
+            dec_spec -= ampl_max + 1e-20  # subtract maximum so that the maximum value is set to lim x--> -0
+            dec_spec[dec_spec < -dyn_range] = -dyn_range
+
+            # Fix NaNs issue
+            if True in np.isnan(dec_spec):
+                dec_spec[np.isnan(dec_spec)] = - dyn_range
+
+        # Reduce the noise by subtracting the mean power of the spectrum plus 5dB
+        med = np.median(mat) + 5
+        mat[mat <= med] = -dyn_range
+
+        im = ax[i].imshow(mat, cmap='jet', extent=[time_arr[0], time_arr[-1],
+                                                   int(freq_arr[0])/hz_fac, int(freq_arr[-1])/hz_fac],
                           aspect='auto', origin='lower', alpha=0.7)
         ax[i].plot(time_arr[pk_idxs[i]], np.ones(len(pk_idxs[i])) * 100, 'o', ms=7, color=colors[i],
                    alpha=.8, mec='k', mew=1.5)
@@ -103,7 +118,7 @@ def get_calls_across_channels(all_ch_filenames, run_window_width=0.05, step_quot
         print('\nAnalyzing Channel ' + str(rec_idx + 1) + ' of ' + str(len(all_ch_filenames)) + '...')
         bat = Batspy(all_ch_filenames[rec_idx], f_resolution=f_res, overlap_frac=overlap, dynamic_range=dr)
         bat.compute_spectrogram()
-        specs.append(bat.plt_spec)
+        specs.append(bat.spec_mat)
         _, p, _ = bat.detect_calls()
         pk_arrays.append(p)
         spec_time = bat.t  # time array of the spectrogram

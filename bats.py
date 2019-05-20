@@ -314,9 +314,9 @@ if __name__ == '__main__':
     # Analyze SingleChannel
     elif rec_type == 's':
 
-        bat = Batspy(recording, f_resolution=2**9, overlap_frac=.70, dynamic_range=70)  # 2^7 = 128
+        bat = Batspy(recording, f_resolution=5000, overlap_frac=.30, dynamic_range=70)  # 2^7 = 128
         bat.compute_spectrogram()
-        embed()
+        bat.plot_spectrogram()
         quit()
         average_power, peaks, _ = bat.detect_calls(plot_in_spec=False)
 
@@ -333,7 +333,8 @@ if __name__ == '__main__':
 
         for c_call in range(len(call_windows)):  # loop through the windows
             nfft = 2 ** 8
-            s, f, t = mlab.specgram(call_windows[c_call], Fs=bat.sampling_rate, NFFT=nfft, noverlap=int(0.8 * nfft))  # Compute a high-res spectrogram of the window
+            s, f, t = mlab.specgram(call_windows[c_call], Fs=bat.sampling_rate,
+                                    NFFT=nfft, noverlap=int(0.8 * nfft))  # Compute a high-res spectrogram of the window
 
             dec_spec = decibel(s)
 
@@ -433,7 +434,6 @@ if __name__ == '__main__':
         call_dict = {e:  np.array(call_dict[e]) for e in call_dict.keys()}
         from multiCH import plot_call_parameter_distributions
         plot_call_parameter_distributions(call_dict)
-
 
         embed()
         quit()
