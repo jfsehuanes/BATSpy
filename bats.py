@@ -314,7 +314,7 @@ if __name__ == '__main__':
     # Analyze SingleChannel
     elif rec_type == 's':
 
-        bat = Batspy(recording, f_resolution=5000, overlap_frac=.30, dynamic_range=70)  # 2^7 = 128
+        bat = Batspy(recording, f_resolution=2000, overlap_frac=.95, dynamic_range=70)  # 2^7 = 128
         bat.compute_spectrogram()
         bat.plot_spectrogram()
         quit()

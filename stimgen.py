@@ -18,6 +18,23 @@ def gauss_kernel2(x, mu, sd1, sd2):
     return y
 
 
+def generate_cf_pulses(pd, pi, fl, freq, sr):
+    s = np.zeros(int(fl*sr))
+    t = np.arange(0., pd, 1./sr)
+
+    sin = np.sin(freq * 2 * np.pi * t)
+    audioio.fade(sin, sr, 0.05)
+
+    lenCallAndInterval = len(sin) + pi * sr
+    max_fitting = np.floor(len(s) / lenCallAndInterval)
+    ids = [int(i * lenCallAndInterval) for i in range(int(max_fitting))]
+
+    for cId in ids:
+        s[cId:int(cId+len(sin))] = sin
+
+    return s
+
+
 def generate_single_pulse(pd, pkf=120000., fb=180000., fe=90000., dyn_range=70, samp_freq=600000):
 
     # calculate the width of the gauss that fits a 2ms call
@@ -59,6 +76,8 @@ def generate_single_pulse(pd, pkf=120000., fb=180000., fe=90000., dyn_range=70, 
 
 if __name__ == '__main__':
 
+    # generate fm-pulses
+
     # define parameters
     durations = np.arange(0.0005, 0.0035, 0.0005)  # pulse durations in s
     intervals = np.arange(0.005, 0.055, 0.005)  # pulse intervals in s
@@ -77,9 +96,9 @@ if __name__ == '__main__':
             # create a 10s empty time trace
             signal = np.zeros(int(sampling_rate * file_duration))
 
-            idsCallAndInterval = len(s) + pi*sampling_rate
-            max_fitting = np.floor(len(signal) / idsCallAndInterval)
-            ids = [int(i * idsCallAndInterval) for i in range(int(max_fitting))]
+            lenCallAndInterval = len(s) + pi * sampling_rate
+            max_fitting = np.floor(len(signal) / lenCallAndInterval)
+            ids = [int(i * lenCallAndInterval) for i in range(int(max_fitting))]
             for cId in ids:
                 signal[cId:int(cId+len(s))] = s
 
@@ -87,4 +106,14 @@ if __name__ == '__main__':
             out_file = folder + 'pd_' + str(pd*1000) + '__pi_' + str(int(round(pi*1000)))  + '.wav'
             # ToDo: fix filename for pi=5ms (put a 0 before the 5)
             audioio.write_audio(out_file, signal, sampling_rate, 'wav')
+
+    # now generate cf-pulses
+    cf_pd = 0.1  # in s
+    cf_pi = 0.04 # in s
+    cfFreqs = np.arange(60000, 180000, 20000)
+    for cf in cfFreqs:
+        cfs = generate_cf_pulses(cf_pd, cf_pi, file_duration, cf, sampling_rate)
+        out_file = folder + 'cfStim_' + str(cf)[:-3] + 'kHz.wav'
+        audioio.write_audio(out_file, cfs, sampling_rate, 'wav')
+
     print("\nDONE, stimulation files saved in " + folder)
