@@ -30,7 +30,7 @@ def generate_cf_pulses(pd, pi, fl, freq, sr):
     ids = [int(i * lenCallAndInterval) for i in range(int(max_fitting))]
 
     for cId in ids:
-        s[cId:int(cId+len(sin))] = sin
+        s[cId:int(cId+len(sin))] = sin * 0.8  # remove clipping by multiplying with 0.8
 
     return s
 
