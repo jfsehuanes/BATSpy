@@ -35,7 +35,7 @@ def generate_cf_pulses(pd, pi, fl, freq, sr):
     return s
 
 
-def generate_single_pulse(pd, pkf=120000., fb=180000., fe=90000., dyn_range=70, samp_freq=600000):
+def generate_single_pulse(pd, pkf=120000., fb=180000., fe=90000., dyn_range=70, samp_freq=600000, fit_gauss=False):
 
     # calculate the width of the gauss that fits a 2ms call
     f_test = np.arange(-50, 50, 0.01)
@@ -68,8 +68,12 @@ def generate_single_pulse(pd, pkf=120000., fb=180000., fe=90000., dyn_range=70, 
     # Signal
     s = np.sin(2. * np.pi * phase)
 
-    # Apply a gaussian kernel
-    s *= gauss_kernel2(f, pkf, sd1, sd2)
+    if fit_gauss:
+        # Apply a gaussian kernel
+        s *= gauss_kernel2(f, pkf, sd1, sd2)
+
+    else:
+        audioio.fade(s, samp_freq, 0.1*pd)
 
     return s
 
