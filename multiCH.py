@@ -20,7 +20,7 @@ def get_all_ch(single_filename):
 
 
 def plot_multiCH_spectrogram(specs_matrix, time_arr, freq_arr, pk_idxs, all_ch_peak_times,
-                             filepath, dyn_range=70, in_kHz=True, adjust_to_max_db=True):
+                             filepath, dyn_range=50, in_kHz=True, adjust_to_max_db=True):
 
     if in_kHz:
         hz_fac = 1000
@@ -43,19 +43,19 @@ def plot_multiCH_spectrogram(specs_matrix, time_arr, freq_arr, pk_idxs, all_ch_p
             ampl_max = np.nanmax(
                 dec_spec)  # define maximum; use nanmax, because decibel function may contain NaN values
             dec_spec -= ampl_max + 1e-20  # subtract maximum so that the maximum value is set to lim x--> -0
-            dec_spec[dec_spec < -dyn_range] = -dyn_range
 
             # Fix NaNs issue
             if True in np.isnan(dec_spec):
                 dec_spec[np.isnan(dec_spec)] = - dyn_range
 
         # Reduce the noise by subtracting the mean power of the spectrum plus 5dB
-        med = np.median(mat) + 5
-        mat[mat <= med] = -dyn_range
+        # med = np.median(mat) + 5
+        # mat[mat <= med] = -dyn_range
 
-        im = ax[i].imshow(mat, cmap='jet', extent=[time_arr[0], time_arr[-1],
+        im = ax[i].imshow(dec_spec, cmap='jet', extent=[time_arr[0], time_arr[-1],
                                                    int(freq_arr[0])/hz_fac, int(freq_arr[-1])/hz_fac],
-                          aspect='auto', origin='lower', alpha=0.7)
+                          aspect='auto', interpolation='hanning', origin='lower', alpha=0.7, vmin=-dyn_range,
+                          vmax=0.)
         ax[i].plot(time_arr[pk_idxs[i]], np.ones(len(pk_idxs[i])) * 100, 'o', ms=7, color=colors[i],
                    alpha=.8, mec='k', mew=1.5)
         ax[i].plot(all_ch_peak_times, np.ones(len(all_ch_peak_times)) * 150, 'o', ms=7, color='gray',
@@ -179,7 +179,7 @@ def get_calls_across_channels(all_ch_filenames, run_window_width=0.05, step_quot
     callChannel = np.delete(callChannel, reps_idx + 1)
 
     if plot_spec:  # plot a spectrogram that includes all channels!
-        plot_multiCH_spectrogram(specs, spec_time, spec_freq, pk_arrays, call_times, recs_info, dyn_range=dr)
+        plot_multiCH_spectrogram(specs, spec_time, spec_freq, pk_arrays, call_times, recs_info)
 
     if debug_plot:  # plot the normed powers for debugging
         fig, ax = plt.subplots()
@@ -224,9 +224,6 @@ def plot_call_parameter_distributions(cp_dict, showit=True):
         pc2.set_facecolor(cfb)
         pc2.set_edgecolor('black')
         pc2.set_alpha(0.8)
-
-    # embed()
-    # quit()
 
     ax1.set_xticks([1, 2, 3, 4])
     ax1.set_xticklabels(['Call Duration', 'Fmax', 'Fpk', 'Fmin'], fontsize=fs)

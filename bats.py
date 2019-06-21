@@ -69,10 +69,10 @@ class Batspy:
         if adjust_to_max_db:
             # set dynamic range
             dec_spec = decibel(self.spec_mat)
+
             ampl_max = np.nanmax(
                 dec_spec)  # define maximum; use nanmax, because decibel function may contain NaN values
             dec_spec -= ampl_max + 1e-20  # subtract maximum so that the maximum value is set to lim x--> -0
-            dec_spec[dec_spec < -self.dynamic_range] = -self.dynamic_range
 
             # Fix NaNs issue
             if True in np.isnan(dec_spec):
@@ -91,13 +91,16 @@ class Batspy:
         else:
             hz_fac = 1
 
+            plt.imshow()
+
         inch_factor = 2.54
         fs = 20
         fig, ax = plt.subplots(figsize=(56. / inch_factor, 30. / inch_factor))
         im = ax.imshow(dec_spec, cmap='jet',
                        extent=[t_arr[0], t_arr[-1],
                                int(f_arr[0])/hz_fac, int(f_arr[-1])/hz_fac],  # divide by 1000 for kHz
-                       aspect='auto', origin='lower', alpha=0.7)
+                       aspect='auto', interpolation='hanning', origin='lower', alpha=0.7, vmin=-self.dynamic_range,
+                       vmax=0.)
 
         cb = fig.colorbar(im)
 
@@ -314,7 +317,7 @@ if __name__ == '__main__':
     # Analyze SingleChannel
     elif rec_type == 's':
 
-        bat = Batspy(recording, f_resolution=2000, overlap_frac=.95, dynamic_range=70)  # 2^7 = 128
+        bat = Batspy(recording, f_resolution=1000, overlap_frac=.90, dynamic_range=50, pcTape_rec=True)  # 2^7 = 128
         bat.compute_spectrogram()
         bat.plot_spectrogram()
         quit()

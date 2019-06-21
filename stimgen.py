@@ -94,7 +94,7 @@ if __name__ == '__main__':
     folder = 'test_result/'
 
     for pd in durations:
-        s = generate_single_pulse(pd)
+        s = generate_single_pulse(pd, pkf=peak_frequency, fb=begin_frequency, fe=end_frequency)
 
         for pi in intervals:
             # create a 10s empty time trace
