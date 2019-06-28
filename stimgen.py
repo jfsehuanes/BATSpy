@@ -27,7 +27,7 @@ def generate_cf_pulses(pd, pi, fl, freq, sr):
 
     lenCallAndInterval = len(sin) + pi * sr
     max_fitting = np.floor(len(s) / lenCallAndInterval)
-    ids = [int(i * lenCallAndInterval) for i in range(int(max_fitting))]
+    ids = [int(i * pi * sr) for i in range(int(max_fitting))]
 
     for cId in ids:
         s[cId:int(cId+len(sin))] = sin * 0.8  # remove clipping by multiplying with 0.8
@@ -102,7 +102,7 @@ if __name__ == '__main__':
 
             lenCallAndInterval = len(s) + pi * sampling_rate
             max_fitting = np.floor(len(signal) / lenCallAndInterval)
-            ids = [int(i * lenCallAndInterval) for i in range(int(max_fitting))]
+            ids = [int(i * pi*sampling_rate) for i in range(int(max_fitting))]
             for cId in ids:
                 signal[cId:int(cId+len(s))] = s
 
@@ -112,7 +112,7 @@ if __name__ == '__main__':
             audioio.write_audio(out_file, signal, sampling_rate, 'wav')
 
     # now generate cf-pulses
-    cf_pd = 0.1  # in s
+    cf_pd = 9.5  # in s
     cf_pi = 0.04 # in s
     cfFreqs = np.arange(60000, 180000, 20000)
     for cf in cfFreqs:
