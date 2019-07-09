@@ -17,7 +17,7 @@ from IPython import embed
 
 class Batspy:
 
-    def __init__(self, file_path, f_resolution=2**9, overlap_frac=0.7, dynamic_range=70, pcTape_rec=False,
+    def __init__(self, file_path, f_resolution=2**9, overlap_frac=0.7, dynamic_range=50, pcTape_rec=False,
                  multiCH=False):
         self.file_path = file_path
         self.file_name = file_path.split('/')[-1]
@@ -44,7 +44,7 @@ class Batspy:
         self.data_loaded = True
         pass
 
-    def compute_spectrogram(self, plotit=False):
+    def compute_spectrogram(self):
         if not self.data_loaded:
             self.load_data()
 
@@ -54,31 +54,34 @@ class Batspy:
                                                       noverlap=int(n_nfft * self.overlap_frac))
         self.spectrogram_computed = True
 
-        if plotit:
-            self.plot_spectrogram()
         pass
 
-    def plot_spectrogram(self, spec_mat=None, f_arr=None, t_arr=None, in_kHz=True, adjust_to_max_db=True,
+    def plot_spectrogram(self, dec_mat=None, spec_mat=None, f_arr=None, t_arr=None, in_kHz=True, adjust_to_max_db=True,
                          ret_fig_and_ax=False, showit=True):
-        if not self.spectrogram_computed:
-            self.compute_spectrogram()
 
-        if spec_mat is None:
+        if spec_mat is None and dec_mat is None:
             spec_mat = self.spec_mat
+            dec_mat = decibel(spec_mat)
+
+        elif spec_mat is not None and dec_mat is None:
+            dec_mat = decibel(spec_mat)
+
+        elif not self.spectrogram_computed:
+            self.compute_spectrogram()
 
         if adjust_to_max_db:
             # set dynamic range
-            dec_spec = decibel(self.spec_mat)
 
             ampl_max = np.nanmax(
-                dec_spec)  # define maximum; use nanmax, because decibel function may contain NaN values
-            dec_spec -= ampl_max + 1e-20  # subtract maximum so that the maximum value is set to lim x--> -0
+                dec_mat)  # define maximum; use nanmax, because decibel function may contain NaN values
+            dec_mat -= ampl_max + 1e-20  # subtract maximum so that the maximum value is set to lim x--> -0
+            dec_mat[dec_mat < -self.dynamic_range] = - self.dynamic_range
 
             # Fix NaNs issue
-            if True in np.isnan(dec_spec):
-                dec_spec[np.isnan(dec_spec)] = - self.dynamic_range
+            if True in np.isnan(dec_mat):
+                dec_mat[np.isnan(dec_mat)] = - self.dynamic_range
         else:
-            dec_spec = spec_mat
+            dec_mat = spec_mat
 
         if f_arr is None:
             f_arr = self.f
@@ -91,12 +94,10 @@ class Batspy:
         else:
             hz_fac = 1
 
-            plt.imshow()
-
         inch_factor = 2.54
         fs = 20
         fig, ax = plt.subplots(figsize=(56. / inch_factor, 30. / inch_factor))
-        im = ax.imshow(dec_spec, cmap='jet',
+        im = ax.imshow(dec_mat, cmap='jet',
                        extent=[t_arr[0], t_arr[-1],
                                int(f_arr[0])/hz_fac, int(f_arr[-1])/hz_fac],  # divide by 1000 for kHz
                        aspect='auto', interpolation='hanning', origin='lower', alpha=0.7, vmin=-self.dynamic_range,
@@ -108,6 +109,9 @@ class Batspy:
         ax.set_ylabel('Frequency [kHz]', fontsize=fs)
         ax.set_xlabel('Time [sec]', fontsize=fs)
         ax.tick_params(labelsize=fs-1)
+
+        # ToDo: Plot the soundwave underneath the spectrogram!!
+
         self.spectrogram_plotted = True
 
         if ret_fig_and_ax:
@@ -140,7 +144,7 @@ class Batspy:
             # plt.show()
 
         if plot_in_spec:
-            spec_fig, spec_ax = self.plot_spectrogram(self.spec_mat, self.f, self.t, ret_fig_and_ax=True)
+            spec_fig, spec_ax = self.plot_spectrogram(spec_mat=self.spec_mat, f_arr=self.f, t_arr=self.t, ret_fig_and_ax=True, showit=False)
             spec_ax.plot(self.t[peaks], np.ones(len(peaks))*80, 'o', ms=20,  # plots the detection at 80kHz
                          color='darkred', alpha=.8, mec='k', mew=3)
             spec_fig.suptitle(self.file_name.split('.')[0])
@@ -317,11 +321,12 @@ if __name__ == '__main__':
     # Analyze SingleChannel
     elif rec_type == 's':
 
-        bat = Batspy(recording, f_resolution=1000, overlap_frac=.90, dynamic_range=50, pcTape_rec=True)  # 2^7 = 128
+        bat = Batspy(recording, f_resolution=2**9, overlap_frac=.70, dynamic_range=50, pcTape_rec=True)  # 2^7 = 128
         bat.compute_spectrogram()
-        bat.plot_spectrogram()
-        quit()
-        average_power, peaks, _ = bat.detect_calls(plot_in_spec=False)
+        # bat.plot_spectrogram()
+
+        # ToDo: Need to improve the basic call detection algorithm!
+        average_power, peaks, _ = bat.detect_calls(det_range=(100000, 150000), plot_in_spec=False, plot_debug=False)
 
         # Goal now is to create small windows for each call
         # make a time array with the sampling rate
@@ -417,21 +422,21 @@ if __name__ == '__main__':
                 call_dict['fe'].append(freqs_of_filtspec[mainHarmonicTrace[-1][0]])
                 call_dict['pf'].append(freqs_of_filtspec[peak_f_idx[0]])
 
-                if (t[mainHarmonicTrace[-1][1]] - t[mainHarmonicTrace[0][1]]) * 1000. > 2.5:
-                    fig, ax = bat.plot_spectrogram(filtered_spec, freqs_of_filtspec, t, ret_fig_and_ax=True)
-                    ax.plot(t[mainHarmonicTrace[:, 1]], freqs_of_filtspec[mainHarmonicTrace[:, 0]]/1000.,
-                            'o', ms=12, color='None', mew=3, mec='k', alpha=0.7)
-                    ax.plot(t[peak_f_idx[1]], freqs_of_filtspec[peak_f_idx[0]] / 1000, 'o', ms=15, color='None', mew=4, mec='purple', alpha=0.8)
-                    ax.set_title('call # %i' % c_call, fontsize=20)
+                # if (t[mainHarmonicTrace[-1][1]] - t[mainHarmonicTrace[0][1]]) * 1000. > 2.5:  # filter for calls longer than 2.5s
+                fig, ax = bat.plot_spectrogram(dec_mat=filtered_spec, f_arr=freqs_of_filtspec, t_arr=t, ret_fig_and_ax=True)
+                ax.plot(t[mainHarmonicTrace[:, 1]], freqs_of_filtspec[mainHarmonicTrace[:, 0]]/1000.,
+                        'o', ms=12, color='None', mew=3, mec='k', alpha=0.7)
+                ax.plot(t[peak_f_idx[1]], freqs_of_filtspec[peak_f_idx[0]] / 1000, 'o', ms=15, color='None', mew=4, mec='purple', alpha=0.8)
+                ax.set_title('call # %i' % c_call, fontsize=20)
 
-                    import os
-                    save_path = '../../data/temp_batspy/' + '/'.join(bat.file_path.split('/')[5:-1]) +\
-                                '/' + bat.file_name.split('.')[0] + '/'
-                    if not os.path.exists(save_path):
-                        os.makedirs(save_path)
+                import os
+                save_path = '../../data/temp_batspy/' + '/'.join(bat.file_path.split('/')[5:-1]) +\
+                            '/' + bat.file_name.split('.')[0] + '/'
+                if not os.path.exists(save_path):
+                    os.makedirs(save_path)
 
-                    fig.savefig(save_path + 'fig_' + str(c_call).zfill(4) + '.pdf')
-                    plt.close(fig)
+                fig.savefig(save_path + 'fig_' + str(c_call).zfill(4) + '.pdf')
+                plt.close(fig)
 
         # Create figure of call parameters
         call_dict = {e:  np.array(call_dict[e]) for e in call_dict.keys()}
