@@ -124,7 +124,7 @@ class Batspy:
         else:
             pass
 
-    def detect_calls(self, det_range=(50000, 150000), plot_debug=False,
+    def detect_calls(self, det_range=(50000, 150000), th_between_calls=0.004, plot_debug=False,
                      plot_in_spec=False, save_spec_w_calls=False):
 
         # Get an average over all frequency channels within detection range
@@ -133,25 +133,33 @@ class Batspy:
         th = np.min(av_power)  # THIS THRESHOLD ROCKS YOUR PANTS! for more detections, increase f_res. 2^7 or 2^8
         if th <= 0:  # Fix cases where th <= 0
             th = np.mean(av_power)
-        peaks, troughs = detect_peaks(av_power, th)  # Use thunderfish's peak-trough algorithm
+        peaks, _ = detect_peaks(av_power, th)  # Use thunderfish's peak-trough algorithm
+
+        # clean pks that might be echoes
+        below_t_th = np.diff(self.t[peaks]) < th_between_calls
+
+        if len(np.where(below_t_th)[0]) == 0:
+            cleaned_peaks = peaks
+        else:
+            cleaned_peaks = np.delete(peaks, np.where(below_t_th)[0])
 
         if plot_debug:
             fig, ax = plt.subplots()
             ax.plot(self.t, av_power)
-            ax.plot(self.t[peaks], np.ones(len(peaks)) * np.max(av_power), 'o', ms=20, color='darkred', alpha=.8,
+            ax.plot(self.t[cleaned_peaks], np.ones(len(cleaned_peaks)) * np.max(av_power), 'o', ms=20, color='darkred', alpha=.8,
                     mec='k', mew=3)
             ax.plot([self.t[0], self.t[-1]], [th, th], '--k', lw=2.5)
             # plt.show()
 
         if plot_in_spec:
             spec_fig, spec_ax = self.plot_spectrogram(spec_mat=self.spec_mat, f_arr=self.f, t_arr=self.t, ret_fig_and_ax=True, showit=False)
-            spec_ax.plot(self.t[peaks], np.ones(len(peaks))*80, 'o', ms=20,  # plots the detection at 80kHz
+            spec_ax.plot(self.t[cleaned_peaks], np.ones(len(cleaned_peaks))*80, 'o', ms=20,  # plots the detection at 80kHz
                          color='darkred', alpha=.8, mec='k', mew=3)
             spec_fig.suptitle(self.file_name.split('.')[0])
             if save_spec_w_calls:
                 spec_fig.savefig('test_result/detected_calls/' + self.file_name.split('.')[0] + '.pdf')
 
-        return av_power, peaks, troughs
+        return av_power, cleaned_peaks
 
 
 if __name__ == '__main__':
@@ -321,12 +329,16 @@ if __name__ == '__main__':
     # Analyze SingleChannel
     elif rec_type == 's':
 
-        bat = Batspy(recording, f_resolution=2**9, overlap_frac=.70, dynamic_range=50, pcTape_rec=True)  # 2^7 = 128
+        bat = Batspy(recording, f_resolution=2**9, overlap_frac=.70, dynamic_range=50, pcTape_rec=False)  # 2^7 = 128
         bat.compute_spectrogram()
-        # bat.plot_spectrogram()
+        # bat.plot_spectrogram(showit=False)
+        pows, pks = bat.detect_calls(det_range=(80000, 150000), plot_in_spec=True)
+        embed()
+        # plt.show()
+        quit()
 
         # ToDo: Need to improve the basic call detection algorithm!
-        average_power, peaks, _ = bat.detect_calls(det_range=(100000, 150000), plot_in_spec=False, plot_debug=False)
+        average_power, peaks = bat.detect_calls(det_range=(100000, 150000), plot_in_spec=False, plot_debug=False)
 
         # Goal now is to create small windows for each call
         # make a time array with the sampling rate

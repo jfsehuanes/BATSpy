@@ -119,7 +119,7 @@ def get_calls_across_channels(all_ch_filenames, run_window_width=0.05, step_quot
         bat = Batspy(all_ch_filenames[rec_idx], f_resolution=f_res, overlap_frac=overlap, dynamic_range=dr)
         bat.compute_spectrogram()
         specs.append(bat.spec_mat)
-        _, p, _ = bat.detect_calls()
+        _, p = bat.detect_calls()
         pk_arrays.append(p)
         spec_time = bat.t  # time array of the spectrogram
         spec_freq = bat.f  # frequency array of the spectrogram
