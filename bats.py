@@ -9,7 +9,7 @@ from sklearn.linear_model import LinearRegression as linreg
 from thunderfish.dataloader import load_data
 from thunderfish.powerspectrum import spectrogram, decibel
 from thunderfish.eventdetection import detect_peaks, percentile_threshold
-from thunderfish.harmonicgroups import harmonic_groups
+from thunderfish.harmonics import harmonic_groups
 from thunderfish.powerspectrum import psd
 
 from IPython import embed
@@ -181,7 +181,8 @@ if __name__ == '__main__':
         # Get all the channels corresponding to the input file
         all_recs = get_all_ch(recording)
         # Get the calls
-        calls, chOfCall = get_calls_across_channels(all_recs, run_window_width=0.05, step_quotient=10, plot_spec=True)
+        calls, chOfCall = get_calls_across_channels(all_recs, run_window_width=0.05, step_quotient=10, dr=30,
+                                                    plot_spec=True)
         chOfCall += 1  # set the channel name same as the filename
 
         # Compute the Pulse-Intervals:

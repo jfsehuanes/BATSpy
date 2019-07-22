@@ -76,7 +76,7 @@ def plot_multiCH_spectrogram(specs_matrix, time_arr, freq_arr, pk_idxs, all_ch_p
 
 
 def get_calls_across_channels(all_ch_filenames, run_window_width=0.05, step_quotient=10, ch_jitter_th=0.005,
-                              f_res=2**9, overlap=0.7, dr=70, plot_spec=False, debug_plot=False):
+                              f_res=2**9, overlap=0.7, dr=50, plot_spec=False, debug_plot=False):
     """
 
     Parameters
@@ -179,7 +179,7 @@ def get_calls_across_channels(all_ch_filenames, run_window_width=0.05, step_quot
     callChannel = np.delete(callChannel, reps_idx + 1)
 
     if plot_spec:  # plot a spectrogram that includes all channels!
-        plot_multiCH_spectrogram(specs, spec_time, spec_freq, pk_arrays, call_times, recs_info)
+        plot_multiCH_spectrogram(specs, spec_time, spec_freq, pk_arrays, call_times, recs_info, dyn_range=dr)
 
     if debug_plot:  # plot the normed powers for debugging
         fig, ax = plt.subplots()
