@@ -57,32 +57,31 @@ def plot_call_bout_vs_CI(times_to_bout_end, diffs):
     pass
 
 
-def save_pi_array(outfile_ends, outfile_diffs, ends2append, diffs2append, readNappend=True, infile_2e=None, infile_dif=None):
+def save_pi_arrays(outfile_ends, outfile_diffs, ends2append, diffs2append):
 
     import os
 
-    if readNappend and (infile_2e is None or infile_dif is None):
-        raise(ValueError("infile(s) not specified!"))
-
     # check if there are existing array-files
-    is_ends = os.path.exists(infile_2e)
-    is_diff = os.path.exists(infile_dif)
+    is_ends = os.path.exists(outfile_ends)
+    is_diff = os.path.exists(outfile_diffs)
 
     if is_ends and is_diff:
-        old_ends = np.load(infile_2e)
-        new_ends = np.vstack((old_ends, ends2append))
+        old_ends = np.load(outfile_ends)
+        new_ends = [e for e in old_ends]
+        new_ends.append(ends2append)
 
-        old_diffs = np.load(infile_dif)
-        new_diffs = np.vstack((old_diffs, diffs2append))
+        old_diffs = np.load(outfile_diffs)
+        new_diffs = [e for e in old_diffs]
+        new_diffs.append(diffs2append)
 
-        np.save(outfile, new_ends)
-        np.save(outfile, new_ends)
+        np.save(outfile_ends, new_ends)
+        np.save(outfile_diffs, new_diffs)
         pass
 
-    elif not is_ends and not_diff:
+    elif not is_ends and not is_diff:
 
-        np.save(outfile, ends2append)
-        np.save(outfile, diffs2append)
+        np.save(outfile_ends, [ends2append])
+        np.save(outfile_diffs, [diffs2append])
         pass
     else:
         print("\nWARNING! Something unexpected happened. There seems to be a call_interval array, but noth the other one.\n")

@@ -181,7 +181,7 @@ if __name__ == '__main__':
         # Get all the channels corresponding to the input file
         all_recs = get_all_ch(recording)
         # Get the calls
-        calls, chOfCall = get_calls_across_channels(all_recs, run_window_width=0.05, step_quotient=10, dr=30,
+        calls, chOfCall = get_calls_across_channels(all_recs, run_window_width=0.05, step_quotient=10, dr=50,
                                                     plot_spec=True)
         chOfCall += 1  # set the channel name same as the filename
 
@@ -294,6 +294,12 @@ if __name__ == '__main__':
         call_dict = {e: np.array(call_dict[e]) for e in call_dict.keys()}
         from multiCH import plot_call_parameter_distributions
         plot_call_parameter_distributions(call_dict, showit=False)
+
+        ################### PASTE THE CATCH SEQUENCES PIs IN ARRAY ##################################
+        from call_intervals import save_pi_arrays
+
+        outf_ends = '../../data/analysis_for_thailand/catch_t2ends.npy'
+        outf_diffs = '../../data/analysis_for_thailand/catch_diffs.npy'
 
         embed()
         quit()
