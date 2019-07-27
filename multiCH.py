@@ -29,8 +29,17 @@ def plot_multiCH_spectrogram(specs_matrix, time_arr, freq_arr, pk_idxs, all_ch_p
 
     inch_factor = 2.54
     fs = 18
-    fig, ax = plt.subplots(nrows=len(specs_matrix), figsize=(50. / inch_factor, 25. / inch_factor),
-                           sharex=True, sharey=True)
+    fig = plt.figure(constrained_layout=True, figsize=(60. / inch_factor, 30. / inch_factor))
+    gs = fig.add_gridspec(len(specs_matrix)+1, 2, height_ratios=(1.9, 1.9, 1.9, 1.9, 0.4), width_ratios=(9.9, .1))
+    ch1 = fig.add_subplot(gs[0, :-1])
+    ch2 = fig.add_subplot(gs[1, :-1])
+    ch3 = fig.add_subplot(gs[2, :-1])
+    ch4 = fig.add_subplot(gs[3, :-1])
+    calls_ax = fig.add_subplot(gs[4:, :-1])
+    cbar_ax = fig.add_subplot(gs[0:, -1])
+
+    ax = [ch1, ch2, ch3, ch4]
+
     colors = ['purple', 'cornflowerblue', 'forestgreen', 'darkred']
 
     for i in np.arange(len(specs_matrix)):
@@ -48,28 +57,42 @@ def plot_multiCH_spectrogram(specs_matrix, time_arr, freq_arr, pk_idxs, all_ch_p
             if True in np.isnan(dec_spec):
                 dec_spec[np.isnan(dec_spec)] = - dyn_range
 
-        # Reduce the noise by subtracting the mean power of the spectrum plus 5dB
-        # med = np.median(mat) + 5
-        # mat[mat <= med] = -dyn_range
-
         im = ax[i].imshow(dec_spec, cmap='jet', extent=[time_arr[0], time_arr[-1],
                                                    int(freq_arr[0])/hz_fac, int(freq_arr[-1])/hz_fac],
                           aspect='auto', interpolation='hanning', origin='lower', alpha=0.7, vmin=-dyn_range,
-                          vmax=0.)
+                          vmax=0., rasterized=True)
         ax[i].plot(time_arr[pk_idxs[i]], np.ones(len(pk_idxs[i])) * 100, 'o', ms=7, color=colors[i],
-                   alpha=.8, mec='k', mew=1.5)
-        ax[i].plot(all_ch_peak_times, np.ones(len(all_ch_peak_times)) * 150, 'o', ms=7, color='gray',
-                   alpha=.8, mec='k', mew=1.5)
-        ax[i].tick_params(labelsize=fs-1)
-    # ToDo: Plot the colorbar!
-    # cb_ticks = np.arange(0, dynamic_range + 10, 10)
-    # cb = fig.colorbar(im)
-    # cb.set_label('dB', fontsize=fs)
+                   alpha=.8, mec='k', mew=1.5, rasterized=True)
 
-    ax[1].set_ylabel('Frequency [kHz]', fontsize=fs+2)
-    ax[-1].set_xlabel('Time [sec]', fontsize=fs+2)
+        # Remove time ticks of the spectrogram
+        ax[i].xaxis.set_major_locator(plt.NullLocator())
+
+    # Plot the colorbar
+    cb = fig.colorbar(im, cax=cbar_ax)
+
+    # Plot call times of all channels in an extra row
+    calls_ax.plot(all_ch_peak_times, np.ones(len(all_ch_peak_times)) * 150, 'o', ms=10, color='gray',
+                  alpha=.8, mec='k', mew=1.5, rasterized=True)
+
+    # Share the axes of spectrograms and the all calls plot
+    ch1.get_shared_y_axes().join(ch1, ch2, ch3, ch4)
+    calls_ax.get_shared_x_axes().join(ch1, ch2, ch3, ch4, calls_ax)
+    calls_ax.set_xlim(time_arr[0], time_arr[-1])
+
+    # Remove ticks
+    calls_ax.yaxis.set_major_locator(plt.NullLocator())
+
+    # Labels
+    cb.set_label('dB', fontsize=fs + 4)
+    ax[2].set_ylabel('Frequency [kHz]', fontsize=fs+4)
+    calls_ax.set_xlabel('Time [sec]', fontsize=fs+4)
     figtitle = '/'.join(filepath.split('/')[-4:-1]) + '/' +\
                '_'.join(filepath.split('/')[-1].split('_')[1:3]).split('.')[0]
+
+    ax.extend([calls_ax, cbar_ax])
+    for c_ax in ax:
+        c_ax.tick_params(labelsize=fs)
+
     fig.suptitle(figtitle, fontsize=fs + 2)
 
     pass

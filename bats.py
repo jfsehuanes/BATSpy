@@ -120,10 +120,10 @@ class Batspy:
         for c_ax in [ax0, ax1, ax2]:
             c_ax.tick_params(labelsize=fs)
 
-        # ToDo: Plot the soundwave underneath the spectrogram!!
+        # Plot the soundwave underneath the spectrogram
         ax1.set_facecolor('black')
         time_arr = np.arange(0, len(self.recording_trace)/self.sampling_rate, 1/self.sampling_rate)
-        ax1.plot(time_arr, self.recording_trace, color='yellow', lw=2)
+        ax1.plot(time_arr, self.recording_trace, color='yellow', lw=2, rasterized=True)
 
         # Share the time axis of spectrogram and raw sound trace
         ax0.get_shared_x_axes().join(ax0, ax1)
@@ -203,7 +203,7 @@ if __name__ == '__main__':
         # Get all the channels corresponding to the input file
         all_recs = get_all_ch(recording)
         # Get the calls
-        calls, chOfCall = get_calls_across_channels(all_recs, run_window_width=0.05, step_quotient=10, dr=50,
+        calls, chOfCall = get_calls_across_channels(all_recs, run_window_width=0.05, step_quotient=10, dr=70,
                                                     plot_spec=True)
         chOfCall += 1  # set the channel name same as the filename
 
