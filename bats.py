@@ -96,26 +96,46 @@ class Batspy:
 
         inch_factor = 2.54
         fs = 20
-        fig, ax = plt.subplots(figsize=(56. / inch_factor, 30. / inch_factor))
-        im = ax.imshow(dec_mat, cmap='jet',
+        fig= plt.figure(constrained_layout=True, figsize=(56. / inch_factor, 30. / inch_factor))
+        gs = fig.add_gridspec(2, 3, height_ratios=(4, 1), width_ratios=(4.85, 4.85, .3))
+        ax0 = fig.add_subplot(gs[0, :-1])
+        ax1 = fig.add_subplot(gs[1, :-1])
+        ax2 = fig.add_subplot(gs[0:, -1])
+
+
+        im = ax0.imshow(dec_mat, cmap='jet',
                        extent=[t_arr[0], t_arr[-1],
                                int(f_arr[0])/hz_fac, int(f_arr[-1])/hz_fac],  # divide by 1000 for kHz
                        aspect='auto', interpolation='hanning', origin='lower', alpha=0.7, vmin=-self.dynamic_range,
                        vmax=0.)
 
-        cb = fig.colorbar(im)
+        cb = fig.colorbar(im, cax=ax2)
 
         cb.set_label('dB', fontsize=fs)
-        ax.set_ylabel('Frequency [kHz]', fontsize=fs)
-        ax.set_xlabel('Time [sec]', fontsize=fs)
-        ax.tick_params(labelsize=fs-1)
+        ax0.set_ylabel('Frequency [kHz]', fontsize=fs+1)
+
+        ax1.set_ylabel('Amplitude [a.u.]', fontsize=fs+1)
+        ax1.set_xlabel('Time [sec]', fontsize=fs+1)
+
+        for c_ax in [ax0, ax1, ax2]:
+            c_ax.tick_params(labelsize=fs)
 
         # ToDo: Plot the soundwave underneath the spectrogram!!
+        ax1.set_facecolor('black')
+        time_arr = np.arange(0, len(self.recording_trace)/self.sampling_rate, 1/self.sampling_rate)
+        ax1.plot(time_arr, self.recording_trace, color='yellow', lw=2)
+
+        # Share the time axis of spectrogram and raw sound trace
+        ax0.get_shared_x_axes().join(ax0, ax1)
+        ax1.set_xlim(0, time_arr[-1])
+
+        # Remove time xticks of the spectrogram
+        ax0.xaxis.set_major_locator(plt.NullLocator())
 
         self.spectrogram_plotted = True
 
         if ret_fig_and_ax:
-            return fig, ax
+            return fig, (ax0, ax1)
         else:
             pass
 
@@ -146,13 +166,15 @@ class Batspy:
         if plot_debug:
             fig, ax = plt.subplots()
             ax.plot(self.t, av_power)
-            ax.plot(self.t[cleaned_peaks], np.ones(len(cleaned_peaks)) * np.max(av_power), 'o', ms=20, color='darkred', alpha=.8,
-                    mec='k', mew=3)
+            ax.plot(self.t[cleaned_peaks], np.ones(len(cleaned_peaks)) * np.max(av_power), 'o', ms=20, color='darkred',
+                    alpha=.8, mec='k', mew=3)
             ax.plot([self.t[0], self.t[-1]], [th, th], '--k', lw=2.5)
             # plt.show()
 
         if plot_in_spec:
-            spec_fig, spec_ax = self.plot_spectrogram(spec_mat=self.spec_mat, f_arr=self.f, t_arr=self.t, ret_fig_and_ax=True, showit=False)
+            spec_fig, spec_ax = self.plot_spectrogram(spec_mat=self.spec_mat, f_arr=self.f, t_arr=self.t,
+                                                      ret_fig_and_ax=True, showit=False)
+            spec_ax = spec_ax[0]
             spec_ax.plot(self.t[cleaned_peaks], np.ones(len(cleaned_peaks))*80, 'o', ms=20,  # plots the detection at 80kHz
                          color='darkred', alpha=.8, mec='k', mew=3)
             spec_fig.suptitle(self.file_name.split('.')[0])
