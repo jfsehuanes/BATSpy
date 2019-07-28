@@ -48,12 +48,13 @@ def plot_call_bout_vs_CI(times_to_bout_end, diffs):
     fig, ax = plt.subplots(figsize=(30. / inch_factor, 15. / inch_factor))
 
     for idx in np.arange(len(diffs)):
-        ax.plot(times_to_bout_end[idx], diffs[idx] * 1000., '-k', alpha=.3, lw=1)
-        ax.plot(times_to_bout_end[idx][0], diffs[idx][0] * 1000., 'ok', ms=10, alpha=.5, lw=1)
+        ax.plot(times_to_bout_end[idx], diffs[idx] * 1000., '-o', color='gray', mec='k', ms=10, alpha=.8, lw=1)
+        # ax.plot(times_to_bout_end[idx][0], diffs[idx][0] * 1000., 'ok', ms=10, alpha=.5, lw=1)
 
-    ax.set_title('Call Intervals during search behavior. %d bouts were detected' % len(diffs))
-    ax.set_xlabel('Time to bout end [s]', fontsize=fs)
-    ax.set_ylabel('Call Interval [ms]', fontsize=fs)
+    #ax.set_title('Call Intervals during search behavior. %d bouts were detected' % len(diffs))
+    ax.set_xlabel('Time to bout end [s]', fontsize=fs+4)
+    ax.set_ylabel('Call Interval [ms]', fontsize=fs+4)
+    ax.tick_params(labelsize=fs + 3)
     pass
 
 

@@ -203,7 +203,7 @@ if __name__ == '__main__':
         # Get all the channels corresponding to the input file
         all_recs = get_all_ch(recording)
         # Get the calls
-        calls, chOfCall = get_calls_across_channels(all_recs, run_window_width=0.05, step_quotient=10, dr=70,
+        calls, chOfCall = get_calls_across_channels(all_recs, run_window_width=0.05, step_quotient=10, dr=50,
                                                     plot_spec=True)
         chOfCall += 1  # set the channel name same as the filename
 
@@ -303,8 +303,10 @@ if __name__ == '__main__':
 
             mainHarmonicTrace = np.array(mainHarmonicTrace)
 
-            if np.abs(noise_floor - filtered_spec[peak_f_idx]) > db_th and \
-                                    (t[mainHarmonicTrace[-1][1]] - t[mainHarmonicTrace[0][1]]) * 1000. > 1.2:
+            # if np.logical_and(calls[c_call] > 1.5, calls[c_call] < 2.6):
+
+            if np.abs(noise_floor - filtered_spec[peak_f_idx]) > db_th:# \
+                    #and (t[mainHarmonicTrace[-1][1]] - t[mainHarmonicTrace[0][1]]) * 1000. > 1.2:
                 call_dict['call_number'].append(c_call)
                 call_dict['cb'].append(t[mainHarmonicTrace[0][1]])
                 call_dict['ce'].append(t[mainHarmonicTrace[-1][1]])

@@ -249,16 +249,16 @@ def plot_call_parameter_distributions(cp_dict, showit=True):
         pc2.set_alpha(0.8)
 
     ax1.set_xticks([1, 2, 3, 4])
-    ax1.set_xticklabels(['Call Duration', 'Fmax', 'Fpk', 'Fmin'], fontsize=fs)
-    ax1.set_ylabel('Duration [ms]', fontsize=fs)
-    ax2.set_ylabel('Frequency [kHz]', fontsize=fs)
-    ax2.set_title('n = %.i' % len(cp_dict['call_number']), fontsize=fs)
+    ax1.set_xticklabels(['Call Duration', 'Fmax', 'Fpk', 'Fmin'], fontsize=fs+4)
+    ax1.set_ylabel('Duration [ms]', fontsize=fs+4)
+    ax2.set_ylabel('Frequency [kHz]', fontsize=fs+4)
+    ax2.set_title('n = %.i' % len(cp_dict['call_number']), fontsize=fs+4)
 
     ax1.set_yticks(np.arange(0., 3.5, 0.5))
     ax2.set_yticks(np.arange(60., 220., 20))
 
     for ax in [ax1, ax2]:
-        ax.tick_params(labelsize=fs-3)
+        ax.tick_params(labelsize=fs+3)
 
     # color the first y axis
     ax1.spines['left'].set_color(cfb)
