@@ -2,8 +2,7 @@ import warnings
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 import sys
 from PyQt5.QtWidgets import QWidget, QMainWindow, QApplication, QAction, QDesktopWidget, QFileDialog, QPushButton, QToolTip,\
-    QVBoxLayout
-from PyQt5.QtGui import QFont
+    QVBoxLayout, QHBoxLayout
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 
@@ -11,7 +10,10 @@ import matplotlib.pyplot as plt
 
 from bats import Batspy
 
+from multiCH import get_all_ch, plot_multiCH_spectrogram
+
 from IPython import embed
+
 
 class MainWindow(QMainWindow):
     
@@ -43,7 +45,7 @@ class MainWindow(QMainWindow):
 
     def load_single_Ch(self):
         loadSObj = QAction('&Load Single Channel', self)
-        loadSObj.setShortcut('Ctrl+1')
+        loadSObj.setShortcut('Ctrl+N')
         loadSObj.setStatusTip('Loads a single channel file')
         loadSObj.triggered.connect(self.click_singleCH)
         return loadSObj
@@ -62,9 +64,26 @@ class MainWindow(QMainWindow):
         _, ax = bat.plot_spectrogram(ret_fig_and_ax=True, fig_input=self.figure, showit=False)
 
         # refresh canvas
+        self.figure.tight_layout()
         self.canvas.draw()
         self.singleCH_loaded = True
         self.statusBar().showMessage("single channel: %s loaded" % ('.../' + '/'.join(self.fname.split('/')[-3:])))
+
+        pass
+
+    def click_multiCH(self):
+        if not self.fname_selected:
+            self.click_open()
+
+        # close previous figure if plotted
+        if self.multiCH_loaded or self.singleCH_loaded:
+            self.figure.clear()
+
+        all_fnames = get_all_ch(self.fname)
+
+        # ToDo: Remake multiCH.py so that it is compatible with just plotting in the gui
+
+
 
     def quit(self):
         quitObj = QAction('&Quit', self)
@@ -105,7 +124,7 @@ class MainWindow(QMainWindow):
         sSize = QDesktopWidget().screenGeometry(-1)
         sWidth = sSize.width()
         sHeight = sSize.height()
-        mwLength = 1500  # in Pixel
+        mwLength = 1800  # in Pixel
 
         # Establish main window size and title
         self.setGeometry(sWidth/2 - mwLength/2, sHeight/2 - mwLength/2, mwLength, mwLength)
@@ -114,20 +133,39 @@ class MainWindow(QMainWindow):
         # Draw the main Canvas
         self.figure = plt.figure()
         self.canvas = FigureCanvas(self.figure)
+
+        # Create the Navigation Toolbar
+        self.navToolbar = NavigationToolbar(self.canvas, self)
+
+        # Select File button
+        selFile = QPushButton('Select File (Ctrl+O)', self)
+        selFile.released.connect(self.click_open)
+        selFile.setToolTip('Select a File!')
+
+        # Load singleCH button
+        loadSCH = QPushButton('Load Single Channel (Ctrl+N)', self)
+        loadSCH.released.connect(self.click_singleCH)
+        # Set tool tip
+        loadSCH.setToolTip('Analyze file as a <b>single channel<\b>')
+
+        # Load multiCH button
+        loadMCH = QPushButton('Load Multi Channel (Ctrl+M)', self)
+        loadMCH.released.connect(self.click_multiCH)
+        loadMCH.setToolTip('Analyze file as a <b>multi channel<\b>')
+
+        # Set a horizontal box where the buttons will be placed
+        hbox = QHBoxLayout()
+        hbox.addWidget(selFile)
+        hbox.addWidget(loadSCH)
+        hbox.addWidget(loadMCH)
+
         layout = QVBoxLayout(self._main)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.canvas)
-
-        # Load singleCH button
-        loadSCh = QPushButton('Load Single Channel', self)
-        loadSCh.move(mwLength - mwLength / 2, mwLength - 100)
-        loadSCh.released.connect(self.click_singleCH)
-        # Set tool tip
-        QToolTip.setFont(QFont('Arial', 14))
-        loadSCh.setToolTip('Analyze current file as a <b>single channel<\b>')
+        layout.addWidget(self.navToolbar)
+        layout.addLayout(hbox)
 
         self.show()
-
 
 
 if __name__ == '__main__':
