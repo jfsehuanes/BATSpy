@@ -39,32 +39,32 @@ class MainWindow(QMainWindow):
             print('opening file %s' %self.fname)
         if len(self.fname) > 0:
             self.fname_selected = True
-            self.statusBar().showMessage("%s selected" % ('.../' + '/'.join(self.fname.split('/')[-3:])))
+            self.statusBar().showMessage("%s selected... awaiting orders!" % ('.../' + '/'.join(self.fname.split('/')[-3:])))
 
-    def load_singleCH(self):
+    def load_single_Ch(self):
+        loadSObj = QAction('&Load Single Channel', self)
+        loadSObj.setShortcut('Ctrl+1')
+        loadSObj.setStatusTip('Loads a single channel file')
+        loadSObj.triggered.connect(self.click_singleCH)
+        return loadSObj
+
+    def click_singleCH(self):
 
         if not self.fname_selected:
             self.click_open()
 
         # close previous figure if plotted
         if self.multiCH_loaded or self.singleCH_loaded:
-            self.fig.clear()
+            self.figure.clear()
 
         bat = Batspy(self.fname, f_resolution=2 ** 9, overlap_frac=.70, dynamic_range=50, pcTape_rec=False)
         bat.compute_spectrogram()
-        self.fig, ax = bat.plot_spectrogram(ret_fig_and_ax=True, showit=False)
-        plt.draw()
+        _, ax = bat.plot_spectrogram(ret_fig_and_ax=True, fig_input=self.figure, showit=False)
 
-        # plot
-        self.plotWidget = FigureCanvas(self.fig)
-        lay = QVBoxLayout(self._main)
-        lay.setContentsMargins(0, 0, 0, 0)
-        lay.addWidget(self.plotWidget)
-
-        # pows, pks = bat.detect_calls(det_range=(80000, 150000), plot_in_spec=True)
-        # embed()
-        # plt.show()
-        # quit()
+        # refresh canvas
+        self.canvas.draw()
+        self.singleCH_loaded = True
+        self.statusBar().showMessage("single channel: %s loaded" % ('.../' + '/'.join(self.fname.split('/')[-3:])))
 
     def quit(self):
         quitObj = QAction('&Quit', self)
@@ -90,6 +90,7 @@ class MainWindow(QMainWindow):
         file = menubar.addMenu("&File")
         file.addAction(self.open())
         file.addAction(self.quit())
+        file.addAction(self.load_single_Ch())
 
         # View Submenu
         view = menubar.addMenu('&View')
@@ -111,11 +112,16 @@ class MainWindow(QMainWindow):
         self.setWindowTitle('BATSpy')
 
         # Draw the main Canvas
+        self.figure = plt.figure()
+        self.canvas = FigureCanvas(self.figure)
+        layout = QVBoxLayout(self._main)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self.canvas)
 
         # Load singleCH button
         loadSCh = QPushButton('Load Single Channel', self)
         loadSCh.move(mwLength - mwLength / 2, mwLength - 100)
-        loadSCh.released.connect(self.load_singleCH)
+        loadSCh.released.connect(self.click_singleCH)
         # Set tool tip
         QToolTip.setFont(QFont('Arial', 14))
         loadSCh.setToolTip('Analyze current file as a <b>single channel<\b>')

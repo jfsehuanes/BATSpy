@@ -57,7 +57,7 @@ class Batspy:
         pass
 
     def plot_spectrogram(self, dec_mat=None, spec_mat=None, f_arr=None, t_arr=None, in_kHz=True, adjust_to_max_db=True,
-                         ret_fig_and_ax=False, showit=True):
+                         ret_fig_and_ax=False, fig_input=None, showit=True):
 
         if spec_mat is None and dec_mat is None:
             spec_mat = self.spec_mat
@@ -96,11 +96,15 @@ class Batspy:
 
         inch_factor = 2.54
         fs = 20
-        fig= plt.figure(constrained_layout=True, figsize=(56. / inch_factor, 30. / inch_factor))
+
+        if fig_input is None:
+            fig = plt.figure(constrained_layout=True, figsize=(56. / inch_factor, 30. / inch_factor))
+        else:
+            fig = fig_input
         gs = fig.add_gridspec(2, 3, height_ratios=(4, 1), width_ratios=(4.85, 4.85, .3))
         ax0 = fig.add_subplot(gs[0, :-1])
         ax1 = fig.add_subplot(gs[1, :-1])
-        ax2 = fig.add_subplot(gs[0:, -1])
+        ax2 = fig.add_subplot(gs[0:-1, -1])
 
 
         im = ax0.imshow(dec_mat, cmap='jet',
