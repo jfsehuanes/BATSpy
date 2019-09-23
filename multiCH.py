@@ -19,8 +19,51 @@ def get_all_ch(single_filename):
     return np.sort(ch_list)
 
 
+def load_all_channels(single_ch_name, f_res=2 ** 9, overlap=0.7, dr=50, ret_call_pks=False):
+    """
+
+    Parameters
+    ----------
+    single_ch_name: str with the file-path and filename of the file to be analyzed
+    f_res: int power of 2
+        The frequency resolution for the powerspectrum. See Batspy-class for details.
+    overlap: float between 0 & 1
+        Overlap fraction of the FFT windows. See Batspy-class for details.
+    dr: int.
+        Sets the dynamic range for spectrogram. See Batspy-class for details.
+    ret_call_pks
+
+    Returns
+    -------
+
+    """
+    all_ch_filenames = get_all_ch(single_ch_name)
+
+    pk_arrays = []
+    specs = []
+
+    for rec_idx in range(len(all_ch_filenames)):
+        print('\nLoading Channel ' + str(rec_idx + 1) + ' of ' + str(len(all_ch_filenames)) + '...')
+        bat = Batspy(all_ch_filenames[rec_idx], f_resolution=f_res, overlap_frac=overlap, dynamic_range=dr)
+        bat.compute_spectrogram()
+        specs.append(bat.spec_mat)
+        _, p = bat.detect_calls()
+        pk_arrays.append(p)
+        spec_time = bat.t  # time array of the spectrogram
+        spec_freq = bat.f  # frequency array of the spectrogram
+        recs_info = bat.file_path
+
+    if ret_call_pks:
+        return specs, spec_time, spec_freq, pk_arrays
+    else:
+        return specs, spec_time, spec_freq
+
+
 def plot_multiCH_spectrogram(specs_matrix, time_arr, freq_arr, pk_idxs, all_ch_peak_times,
-                             filepath, dyn_range=50, in_kHz=True, adjust_to_max_db=True):
+                             filepath, dyn_range=50, in_kHz=True, adjust_to_max_db=True, input_fig=None,
+                             ret_fig_and_ax=False):
+
+    # ToDo: Segregate between plotting the spectrogram only and plotting the calls!
 
     if in_kHz:
         hz_fac = 1000
@@ -29,7 +72,12 @@ def plot_multiCH_spectrogram(specs_matrix, time_arr, freq_arr, pk_idxs, all_ch_p
 
     inch_factor = 2.54
     fs = 18
-    fig = plt.figure(constrained_layout=True, figsize=(60. / inch_factor, 30. / inch_factor))
+
+    if input_fig is None:
+        fig = plt.figure(constrained_layout=True, figsize=(60. / inch_factor, 30. / inch_factor))
+    else:
+        fig = input_fig
+
     gs = fig.add_gridspec(len(specs_matrix)+1, 2, height_ratios=(1.9, 1.9, 1.9, 1.9, 0.4), width_ratios=(9.9, .1))
     ch1 = fig.add_subplot(gs[0, :-1])
     ch2 = fig.add_subplot(gs[1, :-1])
@@ -98,14 +146,14 @@ def plot_multiCH_spectrogram(specs_matrix, time_arr, freq_arr, pk_idxs, all_ch_p
     pass
 
 
-def get_calls_across_channels(all_ch_filenames, run_window_width=0.05, step_quotient=10, ch_jitter_th=0.005,
-                              f_res=2**9, overlap=0.7, dr=50, plot_spec=False, debug_plot=False):
+def get_calls_across_channels(single_filename, run_window_width=0.05, step_quotient=10, ch_jitter_th=0.005,
+                              dr=50, plot_spec=False, debug_plot=False):
     """
 
     Parameters
     ----------
-    all_ch_filenames: array or list.
-    Array with the full path and name of the files from which calls should be extracted from
+    single_filename: str.
+    String with the full path and name of the file from which calls should be extracted from
     run_window_width: float.
         Width of the window (in seconds) that runs through the mean powers in search for calls
     step_quotient: int.
@@ -114,10 +162,6 @@ def get_calls_across_channels(all_ch_filenames, run_window_width=0.05, step_quot
     ch_jitter_th: float.
         The threshold below which calls are considered repetitions (i.e. multiple detections)
         in several channels
-    f_res: int power of 2
-        The frequency resolution for the powerspectrum. See Batspy-class for details.
-    overlap: float between 0 & 1
-        Overlap fraction of the FFT windows. See Batspy-class for details.
     dr: int.
         Sets the dynamic range for spectrogram. See Batspy-class for details.
     plot_spec: bool.
@@ -133,20 +177,7 @@ def get_calls_across_channels(all_ch_filenames, run_window_width=0.05, step_quot
         Returns an array with the times (in seconds) of all detected calls.
 
     """
-
-    pk_arrays = []
-    specs = []
-
-    for rec_idx in range(len(all_ch_filenames)):
-        print('\nAnalyzing Channel ' + str(rec_idx + 1) + ' of ' + str(len(all_ch_filenames)) + '...')
-        bat = Batspy(all_ch_filenames[rec_idx], f_resolution=f_res, overlap_frac=overlap, dynamic_range=dr)
-        bat.compute_spectrogram()
-        specs.append(bat.spec_mat)
-        _, p = bat.detect_calls()
-        pk_arrays.append(p)
-        spec_time = bat.t  # time array of the spectrogram
-        spec_freq = bat.f  # frequency array of the spectrogram
-        recs_info = bat.file_path
+    specs, spec_time, spec_freq, pk_arrays = load_all_channels(single_filename, ret_call_pks=True)
 
     # The problem across channels is that there is a delay in the call from one mike to the other and
     # this results in double detections which are time-shifted.
@@ -202,7 +233,7 @@ def get_calls_across_channels(all_ch_filenames, run_window_width=0.05, step_quot
     callChannel = np.delete(callChannel, reps_idx + 1)
 
     if plot_spec:  # plot a spectrogram that includes all channels!
-        plot_multiCH_spectrogram(specs, spec_time, spec_freq, pk_arrays, call_times, recs_info, dyn_range=dr)
+        plot_multiCH_spectrogram(specs, spec_time, spec_freq, pk_arrays, call_times, single_filename, dyn_range=dr)
 
     if debug_plot:  # plot the normed powers for debugging
         fig, ax = plt.subplots()

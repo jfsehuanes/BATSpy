@@ -204,10 +204,8 @@ if __name__ == '__main__':
     if rec_type == 'm':
         from multiCH import get_all_ch, get_calls_across_channels
 
-        # Get all the channels corresponding to the input file
-        all_recs = get_all_ch(recording)
         # Get the calls
-        calls, chOfCall = get_calls_across_channels(all_recs, run_window_width=0.05, step_quotient=10, dr=50,
+        calls, chOfCall = get_calls_across_channels(recording, run_window_width=0.05, step_quotient=10, dr=50,
                                                     plot_spec=True)
         chOfCall += 1  # set the channel name same as the filename
 
@@ -216,7 +214,7 @@ if __name__ == '__main__':
         bout_calls, bout_diffs = get_CI_and_call_bouts(calls)
 
         rec_dict = {enu+1: Batspy(rec, f_resolution=2**9, overlap_frac=.70, dynamic_range=70)
-                    for enu, rec in enumerate(all_recs)}
+                    for enu, rec in enumerate(get_all_ch(recording))}
         [rec_dict[e].load_data() for e in rec_dict.keys()]  # load the data in all channels
 
         # Goal now is to create small windows for each call
