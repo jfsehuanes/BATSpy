@@ -2,6 +2,7 @@
 
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.gridspec as gridspec
 
 from bats import Batspy
 from thunderfish.powerspectrum import decibel
@@ -77,13 +78,15 @@ def plot_multiCH_spectrogram(specs_matrix, time_arr, freq_arr, filepath, dyn_ran
     else:
         fig = input_fig
 
-    gs = fig.add_gridspec(len(specs_matrix)+1, 2, height_ratios=(1.9, 1.9, 1.9, 1.9, 0.4), width_ratios=(9.9, .1))
+    gs = gridspec.GridSpec(len(specs_matrix)+1, 2, height_ratios=(1.9, 1.9, 1.9, 1.9, 0.4), width_ratios=(9.9, .1))
     ch1 = fig.add_subplot(gs[0, :-1])
     ch2 = fig.add_subplot(gs[1, :-1])
     ch3 = fig.add_subplot(gs[2, :-1])
     ch4 = fig.add_subplot(gs[3, :-1])
     calls_ax = fig.add_subplot(gs[4:, :-1])
     cbar_ax = fig.add_subplot(gs[0:, -1])
+
+    gs.update(wspace=0.05, hspace=0.2)
 
     ch_axs = [ch1, ch2, ch3, ch4]
 
