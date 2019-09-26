@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 
 from bats import Batspy
 
-from multiCH import get_all_ch, plot_multiCH_spectrogram
+from multiCH import get_all_ch, load_all_channels, plot_multiCH_spectrogram, plot_calls_in_spectrogram
 
 from IPython import embed
 
@@ -44,7 +44,7 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage("%s selected... awaiting orders!" % ('.../' + '/'.join(self.fname.split('/')[-3:])))
 
     def load_single_Ch(self):
-        loadSObj = QAction('&Load Single Channel', self)
+        loadSObj = QAction('Load &Single Channel', self)
         loadSObj.setShortcut('Ctrl+N')
         loadSObj.setStatusTip('Loads a single channel file')
         loadSObj.triggered.connect(self.click_singleCH)
@@ -71,6 +71,13 @@ class MainWindow(QMainWindow):
 
         pass
 
+    def load_multiCH(self):
+        loadMObj = QAction('Load &Multi Channel', self)
+        loadMObj.setShortcut('Ctrl+M')
+        loadMObj.setStatusTip('Loads all channels of the same recording simultaneously')
+        loadMObj.triggered.connect(self.click_multiCH)
+        return loadMObj
+
     def click_multiCH(self):
         if not self.fname_selected:
             self.click_open()
@@ -79,9 +86,14 @@ class MainWindow(QMainWindow):
         if self.multiCH_loaded or self.singleCH_loaded:
             self.figure.clear()
 
-        all_fnames = get_all_ch(self.fname)
+        specs, spec_time, spec_freq = load_all_channels(self.fname)
+        plot_multiCH_spectrogram(specs, spec_time, spec_freq, self.fname, input_fig=self.figure)
 
-        # ToDo: Remake multiCH.py so that it is compatible with just plotting in the gui
+        # refresh canvas
+        self.figure.tight_layout()
+        self.canvas.draw()
+        self.multiCH_loaded = True
+        self.statusBar().showMessage("Multi channel: %s loaded" % ('.../' + '/'.join(self.fname.split('/')[-3:])))
 
 
 
@@ -110,6 +122,7 @@ class MainWindow(QMainWindow):
         file.addAction(self.open())
         file.addAction(self.quit())
         file.addAction(self.load_single_Ch())
+        file.addAction(self.load_multiCH())
 
         # View Submenu
         view = menubar.addMenu('&View')
@@ -151,7 +164,7 @@ class MainWindow(QMainWindow):
         # Load multiCH button
         loadMCH = QPushButton('Load Multi Channel (Ctrl+M)', self)
         loadMCH.released.connect(self.click_multiCH)
-        loadMCH.setToolTip('Analyze file as a <b>multi channel<\b>')
+        loadMCH.setToolTip('Search for matching recordings and show all files simultaneously. <b>Multi channel<\b>')
 
         # Set a horizontal box where the buttons will be placed
         hbox = QHBoxLayout()

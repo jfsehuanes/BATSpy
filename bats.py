@@ -207,6 +207,9 @@ if __name__ == '__main__':
         # Get the calls
         calls, chOfCall = get_calls_across_channels(recording, run_window_width=0.05, step_quotient=10, dr=50,
                                                     plot_spec=True)
+
+        plt.show()
+        quit()
         chOfCall += 1  # set the channel name same as the filename
 
         # Compute the Pulse-Intervals:

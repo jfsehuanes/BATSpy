@@ -59,9 +59,8 @@ def load_all_channels(single_ch_name, f_res=2 ** 9, overlap=0.7, dr=50, ret_call
         return specs, spec_time, spec_freq
 
 
-def plot_multiCH_spectrogram(specs_matrix, time_arr, freq_arr, pk_idxs, all_ch_peak_times,
-                             filepath, dyn_range=50, in_kHz=True, adjust_to_max_db=True, input_fig=None,
-                             ret_fig_and_ax=False):
+def plot_multiCH_spectrogram(specs_matrix, time_arr, freq_arr, filepath, dyn_range=50, in_kHz=True, adjust_to_max_db=True, input_fig=None,
+                             ret_fig_chAxs_and_callAx=False):
 
     # ToDo: Segregate between plotting the spectrogram only and plotting the calls!
 
@@ -86,9 +85,7 @@ def plot_multiCH_spectrogram(specs_matrix, time_arr, freq_arr, pk_idxs, all_ch_p
     calls_ax = fig.add_subplot(gs[4:, :-1])
     cbar_ax = fig.add_subplot(gs[0:, -1])
 
-    ax = [ch1, ch2, ch3, ch4]
-
-    colors = ['purple', 'cornflowerblue', 'forestgreen', 'darkred']
+    ch_axs = [ch1, ch2, ch3, ch4]
 
     for i in np.arange(len(specs_matrix)):
 
@@ -105,22 +102,16 @@ def plot_multiCH_spectrogram(specs_matrix, time_arr, freq_arr, pk_idxs, all_ch_p
             if True in np.isnan(dec_spec):
                 dec_spec[np.isnan(dec_spec)] = - dyn_range
 
-        im = ax[i].imshow(dec_spec, cmap='jet', extent=[time_arr[0], time_arr[-1],
+        im = ch_axs[i].imshow(dec_spec, cmap='jet', extent=[time_arr[0], time_arr[-1],
                                                    int(freq_arr[0])/hz_fac, int(freq_arr[-1])/hz_fac],
                           aspect='auto', interpolation='hanning', origin='lower', alpha=0.7, vmin=-dyn_range,
                           vmax=0., rasterized=True)
-        ax[i].plot(time_arr[pk_idxs[i]], np.ones(len(pk_idxs[i])) * 100, 'o', ms=7, color=colors[i],
-                   alpha=.8, mec='k', mew=1.5, rasterized=True)
 
         # Remove time ticks of the spectrogram
-        ax[i].xaxis.set_major_locator(plt.NullLocator())
+        ch_axs[i].xaxis.set_major_locator(plt.NullLocator())
 
     # Plot the colorbar
     cb = fig.colorbar(im, cax=cbar_ax)
-
-    # Plot call times of all channels in an extra row
-    calls_ax.plot(all_ch_peak_times, np.ones(len(all_ch_peak_times)) * 150, 'o', ms=10, color='gray',
-                  alpha=.8, mec='k', mew=1.5, rasterized=True)
 
     # Share the axes of spectrograms and the all calls plot
     ch1.get_shared_y_axes().join(ch1, ch2, ch3, ch4)
@@ -132,16 +123,34 @@ def plot_multiCH_spectrogram(specs_matrix, time_arr, freq_arr, pk_idxs, all_ch_p
 
     # Labels
     cb.set_label('dB', fontsize=fs + 4)
-    ax[2].set_ylabel('Frequency [kHz]', fontsize=fs+4)
+    ch_axs[2].set_ylabel('Frequency [kHz]', fontsize=fs+4)
     calls_ax.set_xlabel('Time [sec]', fontsize=fs+4)
     figtitle = '/'.join(filepath.split('/')[-4:-1]) + '/' +\
                '_'.join(filepath.split('/')[-1].split('_')[1:3]).split('.')[0]
 
-    ax.extend([calls_ax, cbar_ax])
-    for c_ax in ax:
+    ch_axs.extend([calls_ax, cbar_ax])
+    for c_ax in ch_axs:
         c_ax.tick_params(labelsize=fs)
 
     fig.suptitle(figtitle, fontsize=fs + 2)
+
+    if ret_fig_chAxs_and_callAx:
+        return fig, ch_axs, calls_ax
+    else:
+        pass
+
+
+def plot_calls_in_spectrogram(spec_fig, ch_axs, pk_idxs, time_arr, calls_ax, all_ch_peak_times, showit=False):
+
+    # Define colors of the call detection for each channel
+    colors = ['purple', 'cornflowerblue', 'forestgreen', 'darkred']
+
+    for i in range(len(pk_idxs)):
+        ch_axs[i].plot(time_arr[pk_idxs[i]], np.ones(len(pk_idxs[i])) * 100, 'o', ms=7, color=colors[i],
+                       alpha=.8, mec='k', mew=1.5, rasterized=True)
+
+    calls_ax.plot(all_ch_peak_times, np.ones(len(all_ch_peak_times)) * 150, 'o', ms=10, color='gray',
+                  alpha=.8, mec='k', mew=1.5, rasterized=True)
 
     pass
 
@@ -166,7 +175,6 @@ def get_calls_across_channels(single_filename, run_window_width=0.05, step_quoti
         Sets the dynamic range for spectrogram. See Batspy-class for details.
     plot_spec: bool.
         Set to True if you wish to have spectrograms with detected calls plotted.
-
     debug_plot: bool.
         Set to True if you wish a plot with which one can evaluate how the calls from different
         channels are being merged together.
@@ -233,7 +241,9 @@ def get_calls_across_channels(single_filename, run_window_width=0.05, step_quoti
     callChannel = np.delete(callChannel, reps_idx + 1)
 
     if plot_spec:  # plot a spectrogram that includes all channels!
-        plot_multiCH_spectrogram(specs, spec_time, spec_freq, pk_arrays, call_times, single_filename, dyn_range=dr)
+        spec_fig, ch_axs, all_calls_ax = plot_multiCH_spectrogram(specs, spec_time, spec_freq, single_filename,
+                                                                  dyn_range=dr, ret_fig_chAxs_and_callAx=True)
+        plot_calls_in_spectrogram(spec_fig, ch_axs, pk_arrays, spec_time, all_calls_ax, call_times)
 
     if debug_plot:  # plot the normed powers for debugging
         fig, ax = plt.subplots()
