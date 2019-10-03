@@ -41,7 +41,7 @@ class MainWindow(QMainWindow):
             print('opening file %s' %self.fname)
         if len(self.fname) > 0:
             self.fname_selected = True
-            self.statusBar().showMessage("%s selected... awaiting orders!" % ('.../' + '/'.join(self.fname.split('/')[-3:])))
+            self.statusBar().showMessage("%s selected... NOW LOAD EITHER SINGLE OR MULTI CHANNEL!" % ('.../' + '/'.join(self.fname.split('/')[-3:])))
 
     def load_single_Ch(self):
         loadSObj = QAction('Load &Single Channel', self)
@@ -55,9 +55,10 @@ class MainWindow(QMainWindow):
         if not self.fname_selected:
             self.click_open()
 
-        # close previous figure if plotted
-        if self.multiCH_loaded or self.singleCH_loaded:
-            self.figure.clear()
+        self.statusBar().showMessage('Loading Single Channel...')
+
+        # close previous figure
+        self.figure.clear()
 
         bat = Batspy(self.fname, f_resolution=2 ** 9, overlap_frac=.70, dynamic_range=50, pcTape_rec=False)
         bat.compute_spectrogram()
@@ -67,6 +68,7 @@ class MainWindow(QMainWindow):
         self.figure.tight_layout()
         self.canvas.draw()
         self.singleCH_loaded = True
+        self.multiCH_loaded = False
         self.statusBar().showMessage("single channel: %s loaded" % ('.../' + '/'.join(self.fname.split('/')[-3:])))
 
         pass
@@ -79,12 +81,15 @@ class MainWindow(QMainWindow):
         return loadMObj
 
     def click_multiCH(self):
+
+        # ToDo: Perform this method as a separate Thread?
         if not self.fname_selected:
             self.click_open()
 
-        # close previous figure if plotted
-        if self.multiCH_loaded or self.singleCH_loaded:
-            self.figure.clear()
+        self.statusBar().showMessage('Loading Multi Channel...')
+
+        # close previous figure
+        self.figure.clear()
 
         specs, spec_time, spec_freq = load_all_channels(self.fname)
         plot_multiCH_spectrogram(specs, spec_time, spec_freq, self.fname, input_fig=self.figure)
@@ -93,9 +98,8 @@ class MainWindow(QMainWindow):
         self.figure.tight_layout()
         self.canvas.draw()
         self.multiCH_loaded = True
+        self.singleCH_loaded = False
         self.statusBar().showMessage("Multi channel: %s loaded" % ('.../' + '/'.join(self.fname.split('/')[-3:])))
-
-
 
     def quit(self):
         quitObj = QAction('&Quit', self)
@@ -132,6 +136,7 @@ class MainWindow(QMainWindow):
 
         # Calls Submenu
         calls = menubar.addMenu('&Calls')
+        calls.addAction(self.detect_calls())
 
         # get current screen resolution
         sSize = QDesktopWidget().screenGeometry(-1)

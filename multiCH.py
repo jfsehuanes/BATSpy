@@ -75,6 +75,9 @@ def plot_multiCH_spectrogram(specs_matrix, time_arr, freq_arr, filepath, dyn_ran
 
     if input_fig is None:
         fig = plt.figure(constrained_layout=True, figsize=(60. / inch_factor, 30. / inch_factor))
+        figtitle = '/'.join(filepath.split('/')[-4:-1]) + '/' + \
+                   '_'.join(filepath.split('/')[-1].split('_')[1:3]).split('.')[0]
+        fig.suptitle(figtitle, fontsize=fs + 2)
     else:
         fig = input_fig
 
@@ -128,14 +131,10 @@ def plot_multiCH_spectrogram(specs_matrix, time_arr, freq_arr, filepath, dyn_ran
     cb.set_label('dB', fontsize=fs + 4)
     ch_axs[2].set_ylabel('Frequency [kHz]', fontsize=fs+4)
     calls_ax.set_xlabel('Time [sec]', fontsize=fs+4)
-    figtitle = '/'.join(filepath.split('/')[-4:-1]) + '/' +\
-               '_'.join(filepath.split('/')[-1].split('_')[1:3]).split('.')[0]
 
     ch_axs.extend([calls_ax, cbar_ax])
     for c_ax in ch_axs:
         c_ax.tick_params(labelsize=fs)
-
-    fig.suptitle(figtitle, fontsize=fs + 2)
 
     if ret_fig_chAxs_and_callAx:
         return fig, ch_axs, calls_ax

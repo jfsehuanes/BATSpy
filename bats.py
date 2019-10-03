@@ -369,8 +369,8 @@ if __name__ == '__main__':
         bat.compute_spectrogram()
         # bat.plot_spectrogram(showit=False)
         pows, pks = bat.detect_calls(det_range=(80000, 150000), plot_in_spec=True)
-        embed()
-        # plt.show()
+        # embed()
+        plt.show()
         quit()
 
         # ToDo: Need to improve the basic call detection algorithm!
