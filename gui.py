@@ -2,7 +2,7 @@ import warnings
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 import sys
 from PyQt5.QtWidgets import QWidget, QMainWindow, QApplication, QAction, QDesktopWidget, QFileDialog, QPushButton, QToolTip,\
-    QVBoxLayout, QHBoxLayout
+    QVBoxLayout, QHBoxLayout, QGridLayout
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 
@@ -101,6 +101,8 @@ class MainWindow(QMainWindow):
         self.singleCH_loaded = False
         self.statusBar().showMessage("Multi channel: %s loaded" % ('.../' + '/'.join(self.fname.split('/')[-3:])))
 
+        # ToDo: numpy.memmap for loading a huge file directly from the hard drive!!! Do this for the calculated specs
+
     def quit(self):
         quitObj = QAction('&Quit', self)
         quitObj.setShortcut('Ctrl+Q')
@@ -136,7 +138,9 @@ class MainWindow(QMainWindow):
 
         # Calls Submenu
         calls = menubar.addMenu('&Calls')
-        calls.addAction(self.detect_calls())
+
+        # ToDo: integrate the call detection. check if multiCH or singleCH is loaded first
+        # calls.addAction(self.detect_calls())
 
         # get current screen resolution
         sSize = QDesktopWidget().screenGeometry(-1)
@@ -153,7 +157,8 @@ class MainWindow(QMainWindow):
         self.canvas = FigureCanvas(self.figure)
 
         # Create the Navigation Toolbar
-        self.navToolbar = NavigationToolbar(self.canvas, self)
+        # ToDo: create a Handmade Navigation Toolbar with shortcuts
+        # self.navToolbar = NavigationToolbar(self.canvas, self)
 
         # Select File button
         selFile = QPushButton('Select File (Ctrl+O)', self)
@@ -171,17 +176,16 @@ class MainWindow(QMainWindow):
         loadMCH.released.connect(self.click_multiCH)
         loadMCH.setToolTip('Search for matching recordings and show all files simultaneously. <b>Multi channel<\b>')
 
-        # Set a horizontal box where the buttons will be placed
-        hbox = QHBoxLayout()
-        hbox.addWidget(selFile)
-        hbox.addWidget(loadSCH)
-        hbox.addWidget(loadMCH)
+        # Set a layout grid where the plot and buttons will be placed
+        self.central_widget = QWidget(self)
+        layGrid = QGridLayout()
+        layGrid.addWidget(self.canvas, 0, 0, 4, 5)
+        layGrid.addWidget(selFile, 4, 0, 1, 1)
+        layGrid.addWidget(loadSCH, 4, 1, 1, 1)
+        layGrid.addWidget(loadMCH, 4, 2, 1, 1)
 
-        layout = QVBoxLayout(self._main)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.addWidget(self.canvas)
-        layout.addWidget(self.navToolbar)
-        layout.addLayout(hbox)
+        self.central_widget.setLayout(layGrid)
+        self.setCentralWidget(self.central_widget)
 
         self.show()
 
