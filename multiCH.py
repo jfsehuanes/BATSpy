@@ -20,7 +20,7 @@ def get_all_ch(single_filename):
     return np.sort(ch_list)
 
 
-def load_all_channels(single_ch_name, f_res=2 ** 9, overlap=0.7, dr=50, ret_call_pks=False):
+def load_all_channels(single_ch_name, f_res=2 ** 9, overlap=0.7, dr=50, ret_call_pks=False, npy_file=None):
     """
 
     Parameters
@@ -38,29 +38,39 @@ def load_all_channels(single_ch_name, f_res=2 ** 9, overlap=0.7, dr=50, ret_call
     -------
 
     """
-    all_ch_filenames = get_all_ch(single_ch_name)
-
-    pk_arrays = []
-    specs = []
-
-    for rec_idx in range(len(all_ch_filenames)):
-        print('\nLoading Channel ' + str(rec_idx + 1) + ' of ' + str(len(all_ch_filenames)) + '...')
-        bat = Batspy(all_ch_filenames[rec_idx], f_resolution=f_res, overlap_frac=overlap, dynamic_range=dr)
-        bat.compute_spectrogram()
-        specs.append(bat.spec_mat)
-        _, p = bat.detect_calls()
-        pk_arrays.append(p)
-        spec_time = bat.t  # time array of the spectrogram
-        spec_freq = bat.f  # frequency array of the spectrogram
-        recs_info = bat.file_path
-
-    if ret_call_pks:
-        return specs, spec_time, spec_freq, pk_arrays
+    if npy_file is not None:
+        # load specs
+        # load times
+        # load freqs
+        # return them all
+        pass
     else:
-        return specs, spec_time, spec_freq
+        all_ch_filenames = get_all_ch(single_ch_name)
+
+        pk_arrays = []
+        specs = []
+
+        for rec_idx in range(len(all_ch_filenames)):
+            print('\nLoading Channel ' + str(rec_idx + 1) + ' of ' + str(len(all_ch_filenames)) + '...')
+            bat = Batspy(all_ch_filenames[rec_idx], f_resolution=f_res, overlap_frac=overlap, dynamic_range=dr)
+            bat.compute_spectrogram()
+            specs.append(bat.spec_mat)
+            _, p = bat.detect_calls()
+            pk_arrays.append(p)
+            spec_time = bat.spec_params[0]  # time array of the spectrogram
+            spec_freq = bat.spec_params[1]  # frequency array of the spectrogram
+            recs_info = bat.file_path
+
+        spec_params = np.array([spec_time,
+                               spec_freq])
+
+        if ret_call_pks:
+            return specs, spec_params, pk_arrays
+        else:
+            return specs, spec_params
 
 
-def plot_multiCH_spectrogram(specs_matrix, time_arr, freq_arr, filepath, dyn_range=50, in_kHz=True, adjust_to_max_db=True,
+def plot_multiCH_spectrogram(specs_matrix, spec_params, filepath, dyn_range=50, in_kHz=True, adjust_to_max_db=True,
                              input_fig=None, ret_fig_chAxs_and_callAx=False):
 
     # ToDo: Segregate between plotting the spectrogram only and plotting the calls!
@@ -108,10 +118,11 @@ def plot_multiCH_spectrogram(specs_matrix, time_arr, freq_arr, filepath, dyn_ran
             if True in np.isnan(dec_spec):
                 dec_spec[np.isnan(dec_spec)] = - dyn_range
 
-        im = ch_axs[i].imshow(dec_spec, cmap='jet', extent=[time_arr[0], time_arr[-1],
-                                                   int(freq_arr[0])/hz_fac, int(freq_arr[-1])/hz_fac],
-                          aspect='auto', interpolation='hanning', origin='lower', alpha=0.7, vmin=-dyn_range,
-                          vmax=0., rasterized=True)
+        im = ch_axs[i].imshow(dec_spec, cmap='jet', extent=[spec_params[0][0], spec_params[0][-1],
+                                                            int(spec_params[1][0])/hz_fac,
+                                                            int(spec_params[1][-1])/hz_fac],
+                              aspect='auto', interpolation='hanning', origin='lower', alpha=0.7, vmin=-dyn_range,
+                              vmax=0., rasterized=True)
 
         # Remove time ticks of the spectrogram
         ch_axs[i].xaxis.set_major_locator(plt.NullLocator())
@@ -122,7 +133,7 @@ def plot_multiCH_spectrogram(specs_matrix, time_arr, freq_arr, filepath, dyn_ran
     # Share the axes of spectrograms and the all calls plot
     ch1.get_shared_y_axes().join(ch1, ch2, ch3, ch4)
     calls_ax.get_shared_x_axes().join(ch1, ch2, ch3, ch4, calls_ax)
-    calls_ax.set_xlim(time_arr[0], time_arr[-1])
+    calls_ax.set_xlim(spec_params[0][0], spec_params[0][-1])
 
     # Remove ticks
     calls_ax.yaxis.set_major_locator(plt.NullLocator())
@@ -187,7 +198,7 @@ def get_calls_across_channels(single_filename, run_window_width=0.05, step_quoti
         Returns an array with the times (in seconds) of all detected calls.
 
     """
-    specs, spec_time, spec_freq, pk_arrays = load_all_channels(single_filename, ret_call_pks=True)
+    specs, spec_params, pk_arrays = load_all_channels(single_filename, ret_call_pks=True)
 
     # The problem across channels is that there is a delay in the call from one mike to the other and
     # this results in double detections which are time-shifted.
@@ -196,12 +207,12 @@ def get_calls_across_channels(single_filename, run_window_width=0.05, step_quoti
 
     av_pow = [np.mean(e, axis=0) for e in specs]
     norm_pow = [e - np.mean(e) for e in av_pow]  # Norm, because each mike has a different gain and therefore power
-    time_sr = 1. / np.diff(spec_time[:2])[0]  # time resolution of the spectrogram
+    time_sr = 1. / np.diff(spec_params[0][:2])[0]  # time resolution of the spectrogram
 
     # find window_size in index
     idx_window_width = int(np.floor(time_sr * run_window_width / 1.))
     step_size = idx_window_width // step_quotient  # step_size is 0.05s for a run_window_width of 0.2s
-    last_idx = len(spec_time) - idx_window_width
+    last_idx = len(spec_params[0]) - idx_window_width
     steps = np.arange(0, last_idx, step_size)
 
     channel_sequence = np.ones(len(steps))
@@ -227,7 +238,7 @@ def get_calls_across_channels(single_filename, run_window_width=0.05, step_quoti
             channel_w_highest_pow = np.nanargmax([np.mean(norm_pow[e][win_peak_idxs[e]])
                                                   for e in range(len(norm_pow))])
             channel_sequence[enu] = channel_w_highest_pow
-            c_callTimes = spec_time[win_peak_idxs[channel_w_highest_pow]]
+            c_callTimes = spec_params[0][win_peak_idxs[channel_w_highest_pow]]
             call_times.append(c_callTimes)
             callChannel.append(np.array([channel_w_highest_pow for m in range(len(c_callTimes))]))
 
@@ -243,16 +254,16 @@ def get_calls_across_channels(single_filename, run_window_width=0.05, step_quoti
     callChannel = np.delete(callChannel, reps_idx + 1)
 
     if plot_spec:  # plot a spectrogram that includes all channels!
-        spec_fig, ch_axs, all_calls_ax = plot_multiCH_spectrogram(specs, spec_time, spec_freq, single_filename,
+        spec_fig, ch_axs, all_calls_ax = plot_multiCH_spectrogram(specs, spec_params, single_filename,
                                                                   dyn_range=dr, ret_fig_chAxs_and_callAx=True)
-        plot_calls_in_spectrogram(spec_fig, ch_axs, pk_arrays, spec_time, all_calls_ax, call_times)
+        plot_calls_in_spectrogram(spec_fig, ch_axs, pk_arrays, spec_params[0], all_calls_ax, call_times)
 
     if debug_plot:  # plot the normed powers for debugging
         fig, ax = plt.subplots()
         colors = ['purple', 'cornflowerblue', 'forestgreen', 'darkred']
         for i in np.arange(len(specs)):
-            ax.plot(spec_time, norm_pow[i], color=colors[i], alpha=.8)
-            ax.plot(spec_time[pk_arrays[i]], np.ones(len(pk_arrays[i])) * 1 + 1 * i, 'o', ms=7, color=colors[i],
+            ax.plot(spec_params[0], norm_pow[i], color=colors[i], alpha=.8)
+            ax.plot(spec_params[0][pk_arrays[i]], np.ones(len(pk_arrays[i])) * 1 + 1 * i, 'o', ms=7, color=colors[i],
                     alpha=.8, mec='k', mew=3)
         ax.plot(call_times, np.ones(len(call_times)) * 6, 'o', ms=7, color='gray', alpha=.8, mec='k', mew=3)
 

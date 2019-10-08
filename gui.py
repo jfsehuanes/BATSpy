@@ -54,8 +54,8 @@ class PlotClass:
         # close previous figure
         self.figure.clear()
 
-        specs, spec_time, spec_freq = load_all_channels(self.fname)
-        plot_multiCH_spectrogram(specs, spec_time, spec_freq, self.fname, input_fig=self.figure)
+        specs, spec_params = load_all_channels(self.fname)
+        plot_multiCH_spectrogram(specs, spec_params, self.fname, input_fig=self.figure)
 
         # ToDo: Do here the save and afterwards load stuff
         # np.save('temp_files/test_multi.npy', specs)
@@ -147,6 +147,11 @@ class MainWindow(QMainWindow):
         # ToDo: numpy.memmap for loading a huge file directly from the hard drive!!! Do this for the calculated specs.
         # ToDo: First compute the spectrogram, then save it as a numpy file and finally read it with memmap
 
+    def detect_calls(self):
+
+
+        pass
+
     def quit(self):
         quitObj = QAction('&Quit', self)
         quitObj.setShortcut('Ctrl+Q')
@@ -198,7 +203,7 @@ class MainWindow(QMainWindow):
 
         # Create the Navigation Toolbar
         # ToDo: create a Handmade Navigation Toolbar with shortcuts
-        # self.navToolbar = NavigationToolbar(self.canvas, self)
+        self.navToolbar = NavigationToolbar(self.Plot.canvas, self)
 
         # Select File button
         selFile = QPushButton('Select File (Ctrl+O)', self)

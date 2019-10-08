@@ -50,13 +50,14 @@ class Batspy:
 
         from thunderfish.powerspectrum import nfft
         n_nfft = nfft(self.sampling_rate, self.freq_resolution)
-        self.spec_mat, self.f, self.t = mlab.specgram(self.recording_trace, NFFT=n_nfft, Fs=self.sampling_rate,
+        self.spec_mat, f, t = mlab.specgram(self.recording_trace, NFFT=n_nfft, Fs=self.sampling_rate,
                                                       noverlap=int(n_nfft * self.overlap_frac))
+        self.spec_params = np.array([t, f])
         self.spectrogram_computed = True
 
         pass
 
-    def plot_spectrogram(self, dec_mat=None, spec_mat=None, f_arr=None, t_arr=None, in_kHz=True, adjust_to_max_db=True,
+    def plot_spectrogram(self, dec_mat=None, spec_mat=None, spec_params=None, in_kHz=True, adjust_to_max_db=True,
                          ret_fig_and_ax=False, input_fig=None, showit=True):
 
         if spec_mat is None and dec_mat is None:
@@ -83,11 +84,8 @@ class Batspy:
         else:
             dec_mat = spec_mat
 
-        if f_arr is None:
-            f_arr = self.f
-
-        if t_arr is None:
-            t_arr = self.t
+        if spec_params is None:
+            spec_params = self.spec_params
 
         if in_kHz:
             hz_fac = 1000
@@ -107,10 +105,10 @@ class Batspy:
         ax2 = fig.add_subplot(gs[0:-1, -1])
 
         im = ax0.imshow(dec_mat, cmap='jet',
-                       extent=[t_arr[0], t_arr[-1],
-                               int(f_arr[0])/hz_fac, int(f_arr[-1])/hz_fac],  # divide by 1000 for kHz
-                       aspect='auto', interpolation='hanning', origin='lower', alpha=0.7, vmin=-self.dynamic_range,
-                       vmax=0.)
+                        extent=[spec_params[0][0], spec_params[0][-1],
+                               int(spec_params[1][0])/hz_fac, int(spec_params[1][-1])/hz_fac],  # divide by 1000 for kHz
+                        aspect='auto', interpolation='hanning', origin='lower', alpha=0.7, vmin=-self.dynamic_range,
+                        vmax=0.)
 
         cb = fig.colorbar(im, cax=ax2)
 
@@ -151,7 +149,7 @@ class Batspy:
                      plot_in_spec=False, save_spec_w_calls=False):
 
         # Get an average over all frequency channels within detection range
-        av_power = np.mean(self.spec_mat[np.logical_and(self.f > det_range[0], self.f < det_range[1])], axis=0)
+        av_power = np.mean(self.spec_mat[np.logical_and(self.spec_params[1] > det_range[0], self.spec_params[1] < det_range[1])], axis=0)
 
         th = np.min(av_power)  # THIS THRESHOLD ROCKS YOUR PANTS! for more detections, increase f_res. 2^7 or 2^8
         if th <= 0:  # Fix cases where th <= 0
@@ -159,7 +157,7 @@ class Batspy:
         peaks, _ = detect_peaks(av_power, th)  # Use thunderfish's peak-trough algorithm
 
         # clean pks that might be echoes
-        below_t_th = np.diff(self.t[peaks]) < th_between_calls
+        below_t_th = np.diff(self.spec_params[0][peaks]) < th_between_calls
 
         if len(np.where(below_t_th)[0]) == 0:
             cleaned_peaks = peaks
@@ -168,17 +166,17 @@ class Batspy:
 
         if plot_debug:
             fig, ax = plt.subplots()
-            ax.plot(self.t, av_power)
-            ax.plot(self.t[cleaned_peaks], np.ones(len(cleaned_peaks)) * np.max(av_power), 'o', ms=20, color='darkred',
+            ax.plot(self.spec_params[0], av_power)
+            ax.plot(self.spec_params[0][cleaned_peaks], np.ones(len(cleaned_peaks)) * np.max(av_power), 'o', ms=20, color='darkred',
                     alpha=.8, mec='k', mew=3)
-            ax.plot([self.t[0], self.t[-1]], [th, th], '--k', lw=2.5)
+            ax.plot([self.spec_params[0][0], self.spec_params[0][-1]], [th, th], '--k', lw=2.5)
             # plt.show()
 
         if plot_in_spec:
-            spec_fig, spec_ax = self.plot_spectrogram(spec_mat=self.spec_mat, f_arr=self.f, t_arr=self.t,
+            spec_fig, spec_ax = self.plot_spectrogram(spec_mat=self.spec_mat, spec_params=self.spec_params,
                                                       ret_fig_and_ax=True, showit=False)
             spec_ax = spec_ax[0]
-            spec_ax.plot(self.t[cleaned_peaks], np.ones(len(cleaned_peaks))*80, 'o', ms=20,  # plots the detection at 80kHz
+            spec_ax.plot(self.spec_params[0][cleaned_peaks], np.ones(len(cleaned_peaks))*80, 'o', ms=20,  # plots the detection at 80kHz
                          color='darkred', alpha=.8, mec='k', mew=3)
             spec_fig.suptitle(self.file_name.split('.')[0])
             if save_spec_w_calls:
@@ -470,7 +468,8 @@ if __name__ == '__main__':
                 call_dict['pf'].append(freqs_of_filtspec[peak_f_idx[0]])
 
                 # if (t[mainHarmonicTrace[-1][1]] - t[mainHarmonicTrace[0][1]]) * 1000. > 2.5:  # filter for calls longer than 2.5s
-                fig, ax = bat.plot_spectrogram(dec_mat=filtered_spec, f_arr=freqs_of_filtspec, t_arr=t, ret_fig_and_ax=True)
+                fig, ax = bat.plot_spectrogram(dec_mat=filtered_spec, spec_params=np.array([t, freqs_of_filtspec]),
+                                               ret_fig_and_ax=True)
                 ax.plot(t[mainHarmonicTrace[:, 1]], freqs_of_filtspec[mainHarmonicTrace[:, 0]]/1000.,
                         'o', ms=12, color='None', mew=3, mec='k', alpha=0.7)
                 ax.plot(t[peak_f_idx[1]], freqs_of_filtspec[peak_f_idx[0]] / 1000, 'o', ms=15, color='None', mew=4, mec='purple', alpha=0.8)
