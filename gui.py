@@ -38,7 +38,7 @@ class MainWindow(QMainWindow):
         fd = QFileDialog()
         self.fname = fd.getOpenFileName(self, 'Select File', '~/', 'Please select .wav files only (*.wav )')[0]
         if self.verbose == 3:
-            print('opening file %s' %self.fname)
+            print('opening file %s' % self.fname)
         if len(self.fname) > 0:
             self.fname_selected = True
             self.statusBar().showMessage("%s selected... NOW LOAD EITHER SINGLE OR MULTI CHANNEL!" % ('.../' + '/'.join(self.fname.split('/')[-3:])))
@@ -62,6 +62,9 @@ class MainWindow(QMainWindow):
 
         bat = Batspy(self.fname, f_resolution=2 ** 9, overlap_frac=.70, dynamic_range=50, pcTape_rec=False)
         bat.compute_spectrogram()
+        embed()
+        quit()
+
         _, ax = bat.plot_spectrogram(ret_fig_and_ax=True, fig_input=self.figure, showit=False)
 
         # refresh canvas
@@ -94,6 +97,13 @@ class MainWindow(QMainWindow):
         specs, spec_time, spec_freq = load_all_channels(self.fname)
         plot_multiCH_spectrogram(specs, spec_time, spec_freq, self.fname, input_fig=self.figure)
 
+        # ToDo: Do here the save and afterwards load stuff
+        # np.save('temp_files/test_multi.npy', specs)
+        # h = np.load('temp_files/test_multi.npy')
+
+        # embed()
+        # quit()
+
         # refresh canvas
         self.figure.tight_layout()
         self.canvas.draw()
@@ -101,7 +111,8 @@ class MainWindow(QMainWindow):
         self.singleCH_loaded = False
         self.statusBar().showMessage("Multi channel: %s loaded" % ('.../' + '/'.join(self.fname.split('/')[-3:])))
 
-        # ToDo: numpy.memmap for loading a huge file directly from the hard drive!!! Do this for the calculated specs
+        # ToDo: numpy.memmap for loading a huge file directly from the hard drive!!! Do this for the calculated specs.
+        # ToDo: First compute the spectrogram, then save it as a numpy file and finally read it with memmap
 
     def quit(self):
         quitObj = QAction('&Quit', self)
@@ -194,4 +205,5 @@ if __name__ == '__main__':
 
     spygui = QApplication(sys.argv)
     MainWindow = MainWindow()
+    # ToDo: remove tmp files when closing app
     sys.exit(spygui.exec_())
