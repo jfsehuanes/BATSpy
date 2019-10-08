@@ -15,6 +15,61 @@ from multiCH import get_all_ch, load_all_channels, plot_multiCH_spectrogram, plo
 from IPython import embed
 
 
+class PlotClass:
+    
+    def __init__(self):
+
+        # Draw the main Canvas
+        self.figure = plt.figure()
+        self.canvas = FigureCanvas(self.figure)
+        self.figure.clear()  # Clear the figure so that the initial screen is a blank screen
+
+        self.xlim = None
+        self.ylim = None
+
+        self.init_xlim = None
+        self.init_ylim = None
+
+        # Set important variables to None
+        self.fname = None
+
+    def plot_singleCH(self):
+
+        # close previous figure
+        self.figure.clear()
+
+        bat = Batspy(self.fname, f_resolution=2 ** 9, overlap_frac=.70, dynamic_range=50, pcTape_rec=False)
+        bat.compute_spectrogram()
+
+        _, ax = bat.plot_spectrogram(ret_fig_and_ax=True, input_fig=self.figure, showit=False)
+
+        # refresh canvas
+        self.figure.tight_layout()
+        self.canvas.draw()
+
+        pass
+
+    def plot_multiCH(self):
+
+        # close previous figure
+        self.figure.clear()
+
+        specs, spec_time, spec_freq = load_all_channels(self.fname)
+        plot_multiCH_spectrogram(specs, spec_time, spec_freq, self.fname, input_fig=self.figure)
+
+        # ToDo: Do here the save and afterwards load stuff
+        # np.save('temp_files/test_multi.npy', specs)
+        # h = np.load('temp_files/test_multi.npy')
+
+        # embed()
+        # quit()
+
+        # refresh canvas
+        self.figure.tight_layout()
+        self.canvas.draw()
+        pass
+
+
 class MainWindow(QMainWindow):
     
     def __init__(self, verbose=3):
@@ -24,6 +79,9 @@ class MainWindow(QMainWindow):
 
         self.verbose = verbose
 
+        # Insert the PlotClass
+        self.Plot = PlotClass()
+        
         # Initialize function
         self.InitFunc()
 
@@ -37,6 +95,7 @@ class MainWindow(QMainWindow):
     def click_open(self):
         fd = QFileDialog()
         self.fname = fd.getOpenFileName(self, 'Select File', '~/', 'Please select .wav files only (*.wav )')[0]
+        self.Plot.fname = self.fname
         if self.verbose == 3:
             print('opening file %s' % self.fname)
         if len(self.fname) > 0:
@@ -57,19 +116,8 @@ class MainWindow(QMainWindow):
 
         self.statusBar().showMessage('Loading Single Channel...')
 
-        # close previous figure
-        self.figure.clear()
+        self.Plot.plot_singleCH()
 
-        bat = Batspy(self.fname, f_resolution=2 ** 9, overlap_frac=.70, dynamic_range=50, pcTape_rec=False)
-        bat.compute_spectrogram()
-        embed()
-        quit()
-
-        _, ax = bat.plot_spectrogram(ret_fig_and_ax=True, fig_input=self.figure, showit=False)
-
-        # refresh canvas
-        self.figure.tight_layout()
-        self.canvas.draw()
         self.singleCH_loaded = True
         self.multiCH_loaded = False
         self.statusBar().showMessage("single channel: %s loaded" % ('.../' + '/'.join(self.fname.split('/')[-3:])))
@@ -85,28 +133,13 @@ class MainWindow(QMainWindow):
 
     def click_multiCH(self):
 
-        # ToDo: Perform this method as a separate Thread?
         if not self.fname_selected:
             self.click_open()
 
         self.statusBar().showMessage('Loading Multi Channel...')
 
-        # close previous figure
-        self.figure.clear()
+        self.Plot.plot_multiCH()
 
-        specs, spec_time, spec_freq = load_all_channels(self.fname)
-        plot_multiCH_spectrogram(specs, spec_time, spec_freq, self.fname, input_fig=self.figure)
-
-        # ToDo: Do here the save and afterwards load stuff
-        # np.save('temp_files/test_multi.npy', specs)
-        # h = np.load('temp_files/test_multi.npy')
-
-        # embed()
-        # quit()
-
-        # refresh canvas
-        self.figure.tight_layout()
-        self.canvas.draw()
         self.multiCH_loaded = True
         self.singleCH_loaded = False
         self.statusBar().showMessage("Multi channel: %s loaded" % ('.../' + '/'.join(self.fname.split('/')[-3:])))
@@ -163,10 +196,6 @@ class MainWindow(QMainWindow):
         self.setGeometry(sWidth/2 - mwLength/2, sHeight/2 - mwLength/2, mwLength, mwLength)
         self.setWindowTitle('BATSpy')
 
-        # Draw the main Canvas
-        self.figure = plt.figure()
-        self.canvas = FigureCanvas(self.figure)
-
         # Create the Navigation Toolbar
         # ToDo: create a Handmade Navigation Toolbar with shortcuts
         # self.navToolbar = NavigationToolbar(self.canvas, self)
@@ -190,7 +219,7 @@ class MainWindow(QMainWindow):
         # Set a layout grid where the plot and buttons will be placed
         self.central_widget = QWidget(self)
         layGrid = QGridLayout()
-        layGrid.addWidget(self.canvas, 0, 0, 4, 5)
+        layGrid.addWidget(self.Plot.canvas, 0, 0, 4, 5)
         layGrid.addWidget(selFile, 4, 0, 1, 1)
         layGrid.addWidget(loadSCH, 4, 1, 1, 1)
         layGrid.addWidget(loadMCH, 4, 2, 1, 1)

@@ -60,8 +60,8 @@ def load_all_channels(single_ch_name, f_res=2 ** 9, overlap=0.7, dr=50, ret_call
         return specs, spec_time, spec_freq
 
 
-def plot_multiCH_spectrogram(specs_matrix, time_arr, freq_arr, filepath, dyn_range=50, in_kHz=True, adjust_to_max_db=True, input_fig=None,
-                             ret_fig_chAxs_and_callAx=False):
+def plot_multiCH_spectrogram(specs_matrix, time_arr, freq_arr, filepath, dyn_range=50, in_kHz=True, adjust_to_max_db=True,
+                             input_fig=None, ret_fig_chAxs_and_callAx=False):
 
     # ToDo: Segregate between plotting the spectrogram only and plotting the calls!
 
