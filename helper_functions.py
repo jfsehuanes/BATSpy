@@ -1,7 +1,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-from thunderfish.eventdetection import detect_peaks
+from thunderfish.eventdetection import detect_peaks, hist_threshold
+from thunderfish.powerspectrum import decibel
 
 from IPython import embed
 
@@ -50,3 +51,29 @@ def extract_peak_and_th_crossings_from_cumhist(mat, axis, label_array, perc_th=7
         return mx_pk, call_boundaries[::-1]
     else:
         return mx_pk, call_boundaries
+
+
+def set_noise_floor_and_dyn_range(mat, loudest_pxl, th_factor=1):
+    """
+
+    Parameters
+    ----------
+    mat: nd array. Matrix with the raw spectrogram values.
+    loudest_pxl: float. Maximum value of decibel(mat)
+    th_factor float. Factor by which the std is multiplied in order to establish the noise-floor threshold.
+
+    Returns
+    -------
+    dec_spec: nd array. Matrix with decibel values. Noise floor is minimum and max(dec_spec)-loudest_pxl is maximum.
+    noise_floor: float. Noise floor value of the decibel matrix.
+
+    """
+    # Set thunderfish's hist_threshold that estimates the std from the first half of the gaussian-bell
+    dec_spec = decibel(mat)
+    flat_spec = dec_spec.flatten()
+    hist_std, hist_cent = hist_threshold(flat_spec[flat_spec > -200], thresh_fac=1., nbins=200)
+    noise_floor = hist_cent + hist_std * th_factor
+    dec_spec[dec_spec < noise_floor] = noise_floor
+    dec_spec -= loudest_pxl  # subtract loudest pixel of all channels in order to get the maximum
+
+    return dec_spec, noise_floor

@@ -41,7 +41,8 @@ class PlotClass:
         bat = Batspy(self.fname, f_resolution=2 ** 9, overlap_frac=.70, dynamic_range=50, pcTape_rec=False)
         bat.compute_spectrogram()
 
-        _, ax = bat.plot_spectrogram(ret_fig_and_ax=True, input_fig=self.figure, showit=False)
+        _, ax = bat.plot_spectrogram(ret_fig_and_ax=True, input_fig=self.figure, interpolation_type='hanning',
+                                     showit=False)
 
         # refresh canvas
         self.figure.tight_layout()
@@ -55,7 +56,7 @@ class PlotClass:
         self.figure.clear()
 
         specs, spec_params = load_all_channels(self.fname)
-        plot_multiCH_spectrogram(specs, spec_params, self.fname, input_fig=self.figure)
+        plot_multiCH_spectrogram(specs, spec_params, self.fname, interpolation_type='hanning', input_fig=self.figure)
 
         # ToDo: Do here the save and afterwards load stuff
         # np.save('temp_files/test_multi.npy', specs)

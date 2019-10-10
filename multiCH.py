@@ -5,7 +5,9 @@ import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 
 from bats import Batspy
+from helper_functions import set_noise_floor_and_dyn_range
 from thunderfish.powerspectrum import decibel
+from thunderfish.eventdetection import hist_threshold
 
 from IPython import embed
 
@@ -70,7 +72,7 @@ def load_all_channels(single_ch_name, f_res=2 ** 9, overlap=0.7, dr=50, ret_call
             return specs, spec_params
 
 
-def plot_multiCH_spectrogram(specs_matrix, spec_params, filepath, dyn_range=50, in_kHz=True, adjust_to_max_db=True,
+def plot_multiCH_spectrogram(specs_matrix, spec_params, filepath, interpolation_type=None, dyn_range=50, in_kHz=True, adjust_to_max_db=True,
                              input_fig=None, ret_fig_chAxs_and_callAx=False):
 
     # ToDo: Segregate between plotting the spectrogram only and plotting the calls!
@@ -103,26 +105,22 @@ def plot_multiCH_spectrogram(specs_matrix, spec_params, filepath, dyn_range=50, 
 
     ch_axs = [ch1, ch2, ch3, ch4]
 
+    # compute the loudest pixel of all channels
+    loudest_pxl = np.max([np.max(decibel(mat)) for mat in specs_matrix])
+
     for i in np.arange(len(specs_matrix)):
 
         mat = specs_matrix[i]
 
         if adjust_to_max_db:
-            # set dynamic range
-            dec_spec = decibel(mat)
-            ampl_max = np.nanmax(
-                dec_spec)  # define maximum; use nanmax, because decibel function may contain NaN values
-            dec_spec -= ampl_max + 1e-20  # subtract maximum so that the maximum value is set to lim x--> -0
 
-            # Fix NaNs issue
-            if True in np.isnan(dec_spec):
-                dec_spec[np.isnan(dec_spec)] = - dyn_range
+            dec_spec, noise_floor = set_noise_floor_and_dyn_range(mat, loudest_pxl, th_factor=1.)
 
         im = ch_axs[i].imshow(dec_spec, cmap='jet', extent=[spec_params[0][0], spec_params[0][-1],
                                                             int(spec_params[1][0])/hz_fac,
                                                             int(spec_params[1][-1])/hz_fac],
-                              aspect='auto', interpolation='hanning', origin='lower', alpha=0.7, vmin=-dyn_range,
-                              vmax=0., rasterized=True)
+                              aspect='auto', interpolation=interpolation_type, origin='lower', alpha=0.7,
+                              vmin=noise_floor - loudest_pxl, vmax=0, rasterized=True)
 
         # Remove time ticks of the spectrogram
         ch_axs[i].xaxis.set_major_locator(plt.NullLocator())
@@ -198,7 +196,7 @@ def get_calls_across_channels(single_filename, run_window_width=0.05, step_quoti
         Returns an array with the times (in seconds) of all detected calls.
 
     """
-    specs, spec_params, pk_arrays = load_all_channels(single_filename, ret_call_pks=True)
+    specs, spec_params, pk_arrays = load_all_channels(single_filename, f_res=2**12, ret_call_pks=True)
 
     # The problem across channels is that there is a delay in the call from one mike to the other and
     # this results in double detections which are time-shifted.

@@ -5,6 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.mlab as mlab
 
+from helper_functions import set_noise_floor_and_dyn_range
 from sklearn.linear_model import LinearRegression as linreg
 from thunderfish.dataloader import load_data
 from thunderfish.powerspectrum import spectrogram, decibel
@@ -17,7 +18,7 @@ from IPython import embed
 
 class Batspy:
 
-    def __init__(self, file_path, f_resolution=2**9, overlap_frac=0.7, dynamic_range=50, pcTape_rec=False,
+    def __init__(self, file_path, f_resolution=2**11, overlap_frac=0.7, dynamic_range=50, pcTape_rec=False,
                  multiCH=False):
         self.file_path = file_path
         self.file_name = file_path.split('/')[-1]
@@ -51,38 +52,23 @@ class Batspy:
         from thunderfish.powerspectrum import nfft
         n_nfft = nfft(self.sampling_rate, self.freq_resolution)
         self.spec_mat, f, t = mlab.specgram(self.recording_trace, NFFT=n_nfft, Fs=self.sampling_rate,
-                                                      noverlap=int(n_nfft * self.overlap_frac))
+                                            noverlap=int(n_nfft * self.overlap_frac))
         self.spec_params = np.array([t, f])
         self.spectrogram_computed = True
 
         pass
 
-    def plot_spectrogram(self, dec_mat=None, spec_mat=None, spec_params=None, in_kHz=True, adjust_to_max_db=True,
+    def plot_spectrogram(self, interpolation_type=None, spec_params=None, in_kHz=True, adjust_to_max_db=True,
                          ret_fig_and_ax=False, input_fig=None, showit=True):
 
-        if spec_mat is None and dec_mat is None:
-            spec_mat = self.spec_mat
-            dec_mat = decibel(spec_mat)
-
-        elif spec_mat is not None and dec_mat is None:
-            dec_mat = decibel(spec_mat)
-
-        elif not self.spectrogram_computed:
+        if not self.spectrogram_computed:
             self.compute_spectrogram()
 
         if adjust_to_max_db:
-            # set dynamic range
-
-            ampl_max = np.nanmax(
-                dec_mat)  # define maximum; use nanmax, because decibel function may contain NaN values
-            dec_mat -= ampl_max + 1e-20  # subtract maximum so that the maximum value is set to lim x--> -0
-            dec_mat[dec_mat < -self.dynamic_range] = - self.dynamic_range
-
-            # Fix NaNs issue
-            if True in np.isnan(dec_mat):
-                dec_mat[np.isnan(dec_mat)] = - self.dynamic_range
+            loudest_pxl = np.max(decibel(self.spec_mat))
+            dec_mat, noise_floor = set_noise_floor_and_dyn_range(self.spec_mat, loudest_pxl)
         else:
-            dec_mat = spec_mat
+            dec_mat = decibel(self.spec_mat)
 
         if spec_params is None:
             spec_params = self.spec_params
@@ -107,8 +93,8 @@ class Batspy:
         im = ax0.imshow(dec_mat, cmap='jet',
                         extent=[spec_params[0][0], spec_params[0][-1],
                                int(spec_params[1][0])/hz_fac, int(spec_params[1][-1])/hz_fac],  # divide by 1000 for kHz
-                        aspect='auto', interpolation='hanning', origin='lower', alpha=0.7, vmin=-self.dynamic_range,
-                        vmax=0.)
+                        aspect='auto', interpolation=interpolation_type, origin='lower', alpha=0.7,
+                        vmin=noise_floor - loudest_pxl, vmax=0.)
 
         cb = fig.colorbar(im, cax=ax2)
 
@@ -173,7 +159,7 @@ class Batspy:
             # plt.show()
 
         if plot_in_spec:
-            spec_fig, spec_ax = self.plot_spectrogram(spec_mat=self.spec_mat, spec_params=self.spec_params,
+            spec_fig, spec_ax = self.plot_spectrogram(spec_params=self.spec_params,
                                                       ret_fig_and_ax=True, showit=False)
             spec_ax = spec_ax[0]
             spec_ax.plot(self.spec_params[0][cleaned_peaks], np.ones(len(cleaned_peaks))*80, 'o', ms=20,  # plots the detection at 80kHz
@@ -199,14 +185,18 @@ if __name__ == '__main__':
 
     # Analyze MultiChannel
     if rec_type == 'm':
-        from multiCH import get_all_ch, get_calls_across_channels
+        from multiCH import get_all_ch, get_calls_across_channels, plot_multiCH_spectrogram, load_all_channels
+
+        specs, spec_params = load_all_channels(recording, f_res=2**13, overlap=0.7)
+        plot_multiCH_spectrogram(specs, spec_params, recording)
+
+        plt.show()
+        quit()
 
         # Get the calls
         calls, chOfCall = get_calls_across_channels(recording, run_window_width=0.05, step_quotient=10, dr=50,
                                                     plot_spec=True)
 
-        plt.show()
-        quit()
         chOfCall += 1  # set the channel name same as the filename
 
         # Compute the Pulse-Intervals:
@@ -362,7 +352,7 @@ if __name__ == '__main__':
     # Analyze SingleChannel
     elif rec_type == 's':
 
-        bat = Batspy(recording, f_resolution=2**9, overlap_frac=.70, dynamic_range=50, pcTape_rec=False)  # 2^7 = 128
+        bat = Batspy(recording, f_resolution=2**13, overlap_frac=.70, dynamic_range=50, pcTape_rec=False)  # 2^7 = 128
         bat.compute_spectrogram()
         # bat.plot_spectrogram(showit=False)
         pows, pks = bat.detect_calls(det_range=(80000, 150000), plot_in_spec=True)
