@@ -8,6 +8,8 @@ from bats import Batspy
 from helper_functions import set_noise_floor_and_dyn_range
 from thunderfish.powerspectrum import decibel
 from thunderfish.eventdetection import hist_threshold
+import multiprocessing
+from functools import partial
 
 from IPython import embed
 
@@ -21,6 +23,12 @@ def get_all_ch(single_filename):
 
     return np.sort(ch_list)
 
+def compute_spectrogram_routine(filename, f_res, overlap, dr):
+    bat = Batspy(filename, f_resolution=f_res, overlap_frac=overlap, dynamic_range=dr)
+    bat.compute_spectrogram()
+    _, p = bat.detect_calls()
+
+    return bat.spec_mat, bat.spec_params, p
 
 def load_all_channels(single_ch_name, f_res=2 ** 9, overlap=0.7, dr=50, ret_call_pks=False, npy_file=None):
     """
@@ -49,27 +57,26 @@ def load_all_channels(single_ch_name, f_res=2 ** 9, overlap=0.7, dr=50, ret_call
     else:
         all_ch_filenames = get_all_ch(single_ch_name)
 
-        pk_arrays = []
-        specs = []
+        # MultiProcesing Tool
+        core_count = multiprocessing.cpu_count()
+        if core_count == 1:
+            # ToDo: if core_count==1, then do the for loop routine without multiprocessing
+            pool = multiprocessing.Pool(1)
+        else:
+            pool = multiprocessing.Pool(core_count // 2)
 
-        for rec_idx in range(len(all_ch_filenames)):
-            print('\nLoading Channel ' + str(rec_idx + 1) + ' of ' + str(len(all_ch_filenames)) + '...')
-            bat = Batspy(all_ch_filenames[rec_idx], f_resolution=f_res, overlap_frac=overlap, dynamic_range=dr)
-            bat.compute_spectrogram()
-            specs.append(bat.spec_mat)
-            _, p = bat.detect_calls()
-            pk_arrays.append(p)
-            spec_time = bat.spec_params[0]  # time array of the spectrogram
-            spec_freq = bat.spec_params[1]  # frequency array of the spectrogram
-            recs_info = bat.file_path
+        func = partial(compute_spectrogram_routine, f_res = f_res, overlap = overlap, dr = dr)
+        a = pool.map(func, all_ch_filenames)  # The for-loop happens here
+        a = np.array(a)
 
-        spec_params = np.array([spec_time,
-                               spec_freq])
+        specs = list(a[:, 0])
+        spec_params = list(a[:, 1])
+        pk_arrays = list(a[:, 2])
 
         if ret_call_pks:
-            return specs, spec_params, pk_arrays
+            return specs, spec_params[0], pk_arrays
         else:
-            return specs, spec_params
+            return specs, spec_params[0]
 
 
 def plot_multiCH_spectrogram(specs_matrix, spec_params, filepath, interpolation_type=None, dyn_range=50, in_kHz=True, adjust_to_max_db=True,
