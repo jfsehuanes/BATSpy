@@ -9,7 +9,8 @@ from helper_functions import set_noise_floor_and_dyn_range
 from sklearn.linear_model import LinearRegression as linreg
 from thunderfish.dataloader import load_data
 from thunderfish.powerspectrum import spectrogram, decibel
-from thunderfish.eventdetection import detect_peaks, percentile_threshold
+from thunderfish.eventdetection import detect_peaks, percentile_threshold, hist_threshold, threshold_crossings,\
+    trim_to_peak, merge_events
 from thunderfish.harmonics import harmonic_groups
 from thunderfish.powerspectrum import psd
 
@@ -131,24 +132,45 @@ class Batspy:
         else:
             pass
 
-    def detect_calls(self, det_range=(50000, 150000), th_between_calls=0.004, plot_debug=False,
-                     plot_in_spec=False, save_spec_w_calls=False):
+    def detect_calls(self, det_range=(50000, 150000), th_between_calls=0.01, echo_db_th=5.,
+                     plot_debug=False, plot_in_spec=False, save_spec_w_calls=False):
 
         # Get an average over all frequency channels within detection range
-        av_power = np.mean(self.spec_mat[np.logical_and(self.spec_params[1] > det_range[0], self.spec_params[1] < det_range[1])], axis=0)
+        av_power = np.mean(self.spec_mat[np.logical_and(self.spec_params[1] > det_range[0],
+                                                        self.spec_params[1] < det_range[1])], axis=0)
 
-        th = np.min(av_power)  # THIS THRESHOLD ROCKS YOUR PANTS! for more detections, increase f_res. 2^7 or 2^8
-        if th <= 0:  # Fix cases where th <= 0
-            th = np.mean(av_power)
-        peaks, _ = detect_peaks(av_power, th)  # Use thunderfish's peak-trough algorithm
+        dec_av_pow = decibel(av_power)
+        std, center = hist_threshold(dec_av_pow, thresh_fac=1., nbins=1000)
+        peaks, _ = detect_peaks(dec_av_pow, 6.0*std)
+        th = center + 4.*std
+        peaks = peaks[dec_av_pow[peaks] > th]
+
+        # plt.close()
+        #
+        # plt.plot(dec_av_pow)
+        # plt.plot(up_cross, np.ones(len(up_cross)) * th,  'or')
+        # plt.plot(down_cross, np.ones(len(down_cross)) * th, 'og')
+        # plt.show()
+
+
+        # x = np.linspace(np.min(dec_av_pow), np.max(dec_av_pow), 500)
+        # plt.close()
+        # plt.hist(dec_av_pow, 1000)
+        #
+        # plt.plot(x, np.exp(-0.5*((x-center) / std)**2) * 3500)
+        # plt.plot([th, th], [0, 3500], '--k', lw=2)
+
+        # ToDo: merge two peaks that belong to the same call
+        #peaks = [p0 if dec_av_pow[p0] > dec_av_pow[p1] else p1 for p0, p1 in zip(peaks[:-1], peaks[1:])]
 
         # clean pks that might be echoes
-        below_t_th = np.diff(self.spec_params[0][peaks]) < th_between_calls
+        real_echoes = (np.diff(self.spec_params[0][peaks]) < th_between_calls) &\
+                      (dec_av_pow[peaks[1:]] < dec_av_pow[peaks[:-1]] - echo_db_th)
 
-        if len(np.where(below_t_th)[0]) == 0:
+        if len(np.where(real_echoes)[0]) == 0:
             cleaned_peaks = peaks
         else:
-            cleaned_peaks = np.delete(peaks, np.where(below_t_th)[0])
+            cleaned_peaks = np.delete(peaks, np.where(real_echoes)[0]+1)
 
         if plot_debug:
             fig, ax = plt.subplots()
@@ -187,15 +209,17 @@ if __name__ == '__main__':
     if rec_type == 'm':
         from multiCH import get_all_ch, get_calls_across_channels, plot_multiCH_spectrogram, load_all_channels
 
-        specs, spec_params = load_all_channels(recording, f_res=2**13, overlap=0.7)
-        plot_multiCH_spectrogram(specs, spec_params, recording)
-
-        plt.show()
-        quit()
+        # specs, spec_params = load_all_channels(recording, f_res=2**13, overlap=0.7)
+        # plot_multiCH_spectrogram(specs, spec_params, recording)
 
         # Get the calls
         calls, chOfCall = get_calls_across_channels(recording, run_window_width=0.05, step_quotient=10, dr=50,
                                                     plot_spec=True)
+
+        plt.show()
+        quit()
+
+
 
         chOfCall += 1  # set the channel name same as the filename
 
@@ -360,7 +384,6 @@ if __name__ == '__main__':
         plt.show()
         quit()
 
-        # ToDo: Need to improve the basic call detection algorithm!
         average_power, peaks = bat.detect_calls(det_range=(100000, 150000), plot_in_spec=False, plot_debug=False)
 
         # Goal now is to create small windows for each call
