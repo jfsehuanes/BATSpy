@@ -1,8 +1,10 @@
 import warnings
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 import sys
+import numpy as np
 from PyQt5.QtWidgets import QWidget, QMainWindow, QApplication, QAction, QDesktopWidget, QFileDialog, QPushButton, QToolTip,\
     QVBoxLayout, QHBoxLayout, QGridLayout
+from PyQt5.QtGui import QIcon
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 
@@ -24,6 +26,8 @@ class PlotClass:
         self.canvas = FigureCanvas(self.figure)
         self.figure.clear()  # Clear the figure so that the initial screen is a blank screen
 
+        self.ax = None
+
         self.xlim = None
         self.ylim = None
 
@@ -32,6 +36,83 @@ class PlotClass:
 
         # Set important variables to None
         self.fname = None
+
+    def zoom_out(self):
+        xlim = self.xlim
+        ylim = self.ylim
+
+        new_xlim = (xlim[0] - np.diff(xlim)[0] * 0.25, xlim[1] + np.diff(xlim)[0] * 0.25)
+        new_ylim = (ylim[0] - np.diff(ylim)[0] * 0.25, ylim[1] + np.diff(ylim)[0] * 0.25)
+        self.ylim = new_ylim
+        self.xlim = new_xlim
+
+        self.ax.set_xlim(*new_xlim)
+        self.ax.set_ylim(*new_ylim)
+
+        self.figure.canvas.draw()
+
+    def zoom_in(self):
+        xlim = self.xlim
+        ylim = self.ylim
+
+        new_xlim = (xlim[0] + np.diff(xlim)[0] * 0.25, xlim[1] - np.diff(xlim)[0] * 0.25)
+        new_ylim = (ylim[0] + np.diff(ylim)[0] * 0.25, ylim[1] - np.diff(ylim)[0] * 0.25)
+        self.ylim = new_ylim
+        self.xlim = new_xlim
+
+        self.ax.set_xlim(*new_xlim)
+        self.ax.set_ylim(*new_ylim)
+
+        self.figure.canvas.draw()
+
+    def zoom_home(self):
+        new_xlim = self.init_xlim
+        new_ylim = self.init_ylim
+        self.ylim = new_ylim
+        self.xlim = new_xlim
+
+        self.ax.set_xlim(*new_xlim)
+        self.ax.set_ylim(*new_ylim)
+
+        self.figure.canvas.draw()
+
+    def move_right(self):
+        xlim = self.xlim
+
+        new_xlim = (xlim[0] + np.diff(xlim)[0] * 0.25, xlim[1] + np.diff(xlim)[0] * 0.25)
+        self.xlim = new_xlim
+
+        self.ax.set_xlim(*new_xlim)
+
+        self.figure.canvas.draw()
+
+    def move_left(self):
+        xlim = self.xlim
+
+        new_xlim = (xlim[0] - np.diff(xlim)[0] * 0.25, xlim[1] - np.diff(xlim)[0] * 0.25)
+        self.xlim = new_xlim
+
+        self.ax.set_xlim(*new_xlim)
+
+        self.figure.canvas.draw()
+
+    def move_up(self):
+        ylim = self.ylim
+
+        new_ylim = (ylim[0] + np.diff(ylim)[0] * 0.25, ylim[1] + np.diff(ylim)[0] * 0.25)
+        self.ylim = new_ylim
+
+        self.ax.set_ylim(*new_ylim)
+        self.figure.canvas.draw()
+
+    def move_down(self):
+        ylim = self.ylim
+
+        new_ylim = (ylim[0] - np.diff(ylim)[0] * 0.25, ylim[1] - np.diff(ylim)[0] * 0.25)
+        self.ylim = new_ylim
+
+        self.ax.set_ylim(*new_ylim)
+        self.figure.canvas.draw()
 
     def plot_singleCH(self):
 
@@ -43,6 +124,16 @@ class PlotClass:
 
         _, ax = bat.plot_spectrogram(ret_fig_and_ax=True, input_fig=self.figure, interpolation_type='hanning',
                                      showit=False)
+        self.ax = ax[0]
+
+        if self.xlim is None:
+            self.init_xlim = ax[0].get_xlim()
+            self.init_ylim = ax[0].get_ylim()
+            self.xlim = ax[0].get_xlim()
+            self.ylim = ax[0].get_ylim()
+        else:
+            self.xlim = ax[0].get_xlim()
+            self.ylim = ax[0].get_ylim()
 
         # refresh canvas
         self.figure.tight_layout()
@@ -56,7 +147,19 @@ class PlotClass:
         self.figure.clear()
 
         specs, spec_params = load_all_channels(self.fname)
-        plot_multiCH_spectrogram(specs, spec_params, self.fname, interpolation_type='hanning', input_fig=self.figure)
+        _, multi_spec_ax, all_calls_ax = plot_multiCH_spectrogram(specs, spec_params, self.fname,
+                                                               interpolation_type='hanning',
+                                                               input_fig=self.figure,
+                                                               ret_fig_chAxs_and_callAx=True)
+        self.ax = multi_spec_ax[0]
+        if self.xlim is None:
+            self.init_xlim = multi_spec_ax[0].get_xlim()
+            self.init_ylim = multi_spec_ax[0].get_ylim()
+            self.xlim = multi_spec_ax[0].get_xlim()
+            self.ylim = multi_spec_ax[0].get_ylim()
+        else:
+            self.xlim = multi_spec_ax[0].get_xlim()
+            self.ylim = multi_spec_ax[0].get_ylim()
 
         # ToDo: Do here the save and afterwards load stuff
         # np.save('temp_files/test_multi.npy', specs)
@@ -82,9 +185,44 @@ class MainWindow(QMainWindow):
 
         # Insert the PlotClass
         self.Plot = PlotClass()
+
+        # Insert the toolbar init
+        self.initActions()
+        self.init_ZoomToolBar()
         
         # Initialize function
         self.InitFunc()
+
+    def init_ZoomToolBar(self):
+        zToolBar = self.addToolBar('zTB')
+
+        # zToolBar.addAction(self.Act_interactive_zoom)
+        zToolBar.addAction(self.Act_interactive_zoom_out)
+        zToolBar.addAction(self.Act_interactive_zoom_in)
+        zToolBar.addAction(self.Act_interactive_zoom_home)
+
+    def initActions(self):
+
+        self.Act_interactive_zoom_out = QAction(QIcon('symbols/zoomout.png'), 'Zoom -', self)
+        self.Act_interactive_zoom_out.triggered.connect(self.Plot.zoom_out)
+        self.Act_interactive_zoom_out.setEnabled(False)
+
+        self.Act_interactive_zoom_in = QAction(QIcon('symbols/zoomin.png'), 'Zoom +', self)
+        self.Act_interactive_zoom_in.triggered.connect(self.Plot.zoom_in)
+        self.Act_interactive_zoom_in.setEnabled(False)
+
+        self.Act_interactive_zoom_home = QAction(QIcon('symbols/zoom_home.png'), 'Zoom Home', self)
+        self.Act_interactive_zoom_home.triggered.connect(self.Plot.zoom_home)
+        self.Act_interactive_zoom_home.setEnabled(False)
+
+        self.Act_interactive_zoom = QAction(QIcon('symbols/zoom.png'), 'Zoom Select', self)
+        self.Act_interactive_zoom.setCheckable(True)
+        self.Act_interactive_zoom.setEnabled(False)
+
+    def enable_plot_buttons(self):
+        self.Act_interactive_zoom_out.setEnabled(True)
+        self.Act_interactive_zoom_in.setEnabled(True)
+        self.Act_interactive_zoom_home.setEnabled(True)
 
     def open(self):
         openObj = QAction('&Open', self)
@@ -123,6 +261,7 @@ class MainWindow(QMainWindow):
         self.multiCH_loaded = False
         self.statusBar().showMessage("single channel: %s loaded" % ('.../' + '/'.join(self.fname.split('/')[-3:])))
 
+        self.enable_plot_buttons()
         pass
 
     def load_multiCH(self):
@@ -145,6 +284,7 @@ class MainWindow(QMainWindow):
         self.singleCH_loaded = False
         self.statusBar().showMessage("Multi channel: %s loaded" % ('.../' + '/'.join(self.fname.split('/')[-3:])))
 
+        self.enable_plot_buttons()
         # ToDo: numpy.memmap for loading a huge file directly from the hard drive!!! Do this for the calculated specs.
         # ToDo: First compute the spectrogram, then save it as a numpy file and finally read it with memmap
 
@@ -204,7 +344,7 @@ class MainWindow(QMainWindow):
 
         # Create the Navigation Toolbar
         # ToDo: create a Handmade Navigation Toolbar with shortcuts
-        self.navToolbar = NavigationToolbar(self.Plot.canvas, self)
+        # self.navToolbar = NavigationToolbar(self.Plot.canvas, self)
 
         # Select File button
         selFile = QPushButton('Select File (Ctrl+O)', self)

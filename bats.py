@@ -161,7 +161,9 @@ class Batspy:
         # plt.plot([th, th], [0, 3500], '--k', lw=2)
 
         # ToDo: merge two peaks that belong to the same call
-        #peaks = [p0 if dec_av_pow[p0] > dec_av_pow[p1] else p1 for p0, p1 in zip(peaks[:-1], peaks[1:])]
+        # embed()
+        # quit()
+        # peaks = [p0 if dec_av_pow[p0] > dec_av_pow[p1] else p1 for p0, p1 in zip(peaks[:-1], peaks[1:])]
 
         # clean pks that might be echoes
         real_echoes = (np.diff(self.spec_params[0][peaks]) < th_between_calls) &\
