@@ -3,8 +3,9 @@ warnings.filterwarnings("ignore", category=RuntimeWarning)
 import sys
 import numpy as np
 from PyQt5.QtWidgets import QWidget, QMainWindow, QApplication, QAction, QDesktopWidget, QFileDialog, QPushButton, QToolTip,\
-    QVBoxLayout, QHBoxLayout, QGridLayout
+    QVBoxLayout, QHBoxLayout, QGridLayout, qApp
 from PyQt5.QtGui import QIcon
+from PyQt5.QtCore import Qt, QEvent
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 
@@ -42,7 +43,7 @@ class PlotClass:
         ylim = self.ylim
 
         new_xlim = (xlim[0] - np.diff(xlim)[0] * 0.25, xlim[1] + np.diff(xlim)[0] * 0.25)
-        new_ylim = (ylim[0] - np.diff(ylim)[0] * 0.25, ylim[1] + np.diff(ylim)[0] * 0.25)
+        new_ylim = (ylim[0] - np.diff(ylim)[0] * 0.02, ylim[1] + np.diff(ylim)[0] * 0.02)
         self.ylim = new_ylim
         self.xlim = new_xlim
 
@@ -56,7 +57,7 @@ class PlotClass:
         ylim = self.ylim
 
         new_xlim = (xlim[0] + np.diff(xlim)[0] * 0.25, xlim[1] - np.diff(xlim)[0] * 0.25)
-        new_ylim = (ylim[0] + np.diff(ylim)[0] * 0.25, ylim[1] - np.diff(ylim)[0] * 0.25)
+        new_ylim = (ylim[0] + np.diff(ylim)[0] * 0.02, ylim[1] - np.diff(ylim)[0] * 0.02)
         self.ylim = new_ylim
         self.xlim = new_xlim
 
@@ -176,8 +177,8 @@ class PlotClass:
 
 class MainWindow(QMainWindow):
     
-    def __init__(self, verbose=3):
-        super().__init__()
+    def __init__(self, parent=None, verbose=3):
+        super(MainWindow, self).__init__(parent)
         self._main = QWidget()
         self.setCentralWidget(self._main)
 
@@ -189,6 +190,9 @@ class MainWindow(QMainWindow):
         # Insert the toolbar init
         self.initActions()
         self.init_ZoomToolBar()
+
+        # # Install the EventFilter
+        # qApp.installEventFilter(self)
         
         # Initialize function
         self.InitFunc()
@@ -197,32 +201,60 @@ class MainWindow(QMainWindow):
         zToolBar = self.addToolBar('zTB')
 
         # zToolBar.addAction(self.Act_interactive_zoom)
-        zToolBar.addAction(self.Act_interactive_zoom_out)
-        zToolBar.addAction(self.Act_interactive_zoom_in)
-        zToolBar.addAction(self.Act_interactive_zoom_home)
+        zToolBar.addAction(self.Act_zoom_out)
+        zToolBar.addAction(self.Act_zoom_in)
+        zToolBar.addAction(self.Act_zoom_home)
+        # zToolBar.addAction(self.Act_arrowkeys)
 
     def initActions(self):
 
-        self.Act_interactive_zoom_out = QAction(QIcon('symbols/zoomout.png'), 'Zoom -', self)
-        self.Act_interactive_zoom_out.triggered.connect(self.Plot.zoom_out)
-        self.Act_interactive_zoom_out.setEnabled(False)
+        self.Act_zoom_out = QAction(QIcon('symbols/zoomout.png'), 'Zoom -', self)
+        self.Act_zoom_out.triggered.connect(self.Plot.zoom_out)
+        self.Act_zoom_out.setShortcut('Ctrl+-')
+        self.Act_zoom_out.setEnabled(False)
 
-        self.Act_interactive_zoom_in = QAction(QIcon('symbols/zoomin.png'), 'Zoom +', self)
-        self.Act_interactive_zoom_in.triggered.connect(self.Plot.zoom_in)
-        self.Act_interactive_zoom_in.setEnabled(False)
+        self.Act_zoom_in = QAction(QIcon('symbols/zoomin.png'), 'Zoom +', self)
+        self.Act_zoom_in.triggered.connect(self.Plot.zoom_in)
+        self.Act_zoom_in.setShortcut('Ctrl++')
+        self.Act_zoom_in.setEnabled(False)
 
-        self.Act_interactive_zoom_home = QAction(QIcon('symbols/zoom_home.png'), 'Zoom Home', self)
-        self.Act_interactive_zoom_home.triggered.connect(self.Plot.zoom_home)
-        self.Act_interactive_zoom_home.setEnabled(False)
+        self.Act_zoom_home = QAction(QIcon('symbols/zoom_home.png'), 'Zoom Home', self)
+        self.Act_zoom_home.triggered.connect(self.Plot.zoom_home)
+        self.Act_zoom_home.setShortcut('Ctrl+h')
+        self.Act_zoom_home.setEnabled(False)
 
         self.Act_interactive_zoom = QAction(QIcon('symbols/zoom.png'), 'Zoom Select', self)
         self.Act_interactive_zoom.setCheckable(True)
         self.Act_interactive_zoom.setEnabled(False)
 
+        # self.Act_arrowkeys = QAction(QIcon('symbols/arrowkeys.png'), 'Activate arrorw keys', self)
+        # self.Act_arrowkeys.setCheckable(True)
+        # self.Act_arrowkeys.setEnabled(False)
+
     def enable_plot_buttons(self):
-        self.Act_interactive_zoom_out.setEnabled(True)
-        self.Act_interactive_zoom_in.setEnabled(True)
-        self.Act_interactive_zoom_home.setEnabled(True)
+        self.Act_zoom_out.setEnabled(True)
+        self.Act_zoom_in.setEnabled(True)
+        self.Act_zoom_home.setEnabled(True)
+    #     self.Act_arrowkeys.setEnabled(True)
+    #
+    # # Create an eventfilter for panning with the ArrowKeys. Need EventFilter to avoid conflict with arrow-keys
+    # def eventFilter(self, source, event):
+    #     if event.type() == QEvent.KeyPress:
+    #         if self.Act_arrowkeys.isChecked():
+    #             if event.key() == Qt.Key_Right:
+    #                 self.Plot.move_right()
+    #                 return True
+    #             elif event.key() == Qt.Key_Left:
+    #                 self.Plot.move_left()
+    #                 return True
+    #             elif event.key() == Qt.Key_Up:
+    #                 self.Plot.move_up()
+    #                 return True
+    #             elif event.key() == Qt.Key_Down:
+    #                 self.Plot.move_down()
+    #                 return True
+    #
+    #     return super(MainWindow, self).eventFilter(source, event)
 
     def open(self):
         openObj = QAction('&Open', self)
