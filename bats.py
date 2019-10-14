@@ -380,8 +380,8 @@ if __name__ == '__main__':
 
         bat = Batspy(recording, f_resolution=2**13, overlap_frac=.70, dynamic_range=50, pcTape_rec=False)  # 2^7 = 128
         bat.compute_spectrogram()
-        # bat.plot_spectrogram(showit=False)
-        pows, pks = bat.detect_calls(det_range=(80000, 150000), plot_in_spec=True)
+        bat.plot_spectrogram(showit=True, interpolation_type='hanning')
+        # pows, pks = bat.detect_calls(det_range=(80000, 150000), plot_in_spec=True)
         # embed()
         plt.show()
         quit()
