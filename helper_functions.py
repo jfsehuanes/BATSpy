@@ -1,3 +1,4 @@
+import os
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -50,3 +51,61 @@ def extract_peak_and_th_crossings_from_cumhist(mat, axis, label_array, perc_th=7
         return mx_pk, call_boundaries[::-1]
     else:
         return mx_pk, call_boundaries
+
+
+def save_pis_and_call_parameters(new_pis, callp_dict, save_folder, overwrite=True):
+
+    if save_folder[-1] != '/':
+        save_folder += '/'
+
+    # File names
+    pis_name = 'all_pulse_intervals.npy'
+    cb_name = 'call_begin.npy'
+    ce_name = 'call_end.npy'
+    fb_name = 'call_fb.npy'
+    pf_name = 'call_pk.npy'
+    fe_name = 'call_fe.npy'
+
+    # First save the pulse intervals
+    if os.path.exists(save_folder + pis_name):
+        prev_pis = np.load(save_folder + pis_name)
+        np.save(save_folder + pis_name, np.hstack((prev_pis, new_pis)))
+    else:
+        np.save(save_folder + pis_name, new_pis)
+
+    # Now save the call parameters
+    # Call begin
+    if os.path.exists(save_folder + cb_name):
+        prev_cb = np.load(save_folder + cb_name)
+        np.save(save_folder + cb_name, np.hstack((prev_cb, callp_dict['cb'])))
+    else:
+        np.save(save_folder + cb_name, callp_dict['cb'])
+
+    # Call end
+    if os.path.exists(save_folder + ce_name):
+        prev_ce = np.load(save_folder + ce_name)
+        np.save(save_folder + ce_name, np.hstack((prev_ce, callp_dict['ce'])))
+    else:
+        np.save(save_folder + ce_name, callp_dict['ce'])
+
+    # Frequency begin
+    if os.path.exists(save_folder + fb_name):
+        prev_fb = np.load(save_folder + fb_name)
+        np.save(save_folder + fb_name, np.hstack((prev_fb, callp_dict['fb'])))
+    else:
+        np.save(save_folder + fb_name, callp_dict['fb'])
+
+    # Peak Frequency
+    if os.path.exists(save_folder + pf_name):
+        prev_pf = np.load(save_folder + pf_name)
+        np.save(save_folder + pf_name, np.hstack((prev_pf, callp_dict['pf'])))
+    else:
+        np.save(save_folder + pf_name, callp_dict['pf'])
+
+    # Frequency end
+    if os.path.exists(save_folder + fe_name):
+        prev_fe = np.load(save_folder + fe_name)
+        np.save(save_folder + fe_name, np.hstack((prev_fe, callp_dict['fe'])))
+    else:
+        np.save(save_folder + fe_name, callp_dict['fe'])
+

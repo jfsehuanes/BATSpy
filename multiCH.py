@@ -61,8 +61,9 @@ def plot_multiCH_spectrogram(specs_matrix, time_arr, freq_arr, pk_idxs, all_ch_p
                                                    int(freq_arr[0])/hz_fac, int(freq_arr[-1])/hz_fac],
                           aspect='auto', interpolation='hanning', origin='lower', alpha=0.7, vmin=-dyn_range,
                           vmax=0., rasterized=True)
-        ax[i].plot(time_arr[pk_idxs[i]], np.ones(len(pk_idxs[i])) * 100, 'o', ms=7, color=colors[i],
-                   alpha=.8, mec='k', mew=1.5, rasterized=True)
+        # ax[i].plot(time_arr[pk_idxs[i]], np.ones(len(pk_idxs[i])) * 280, 'o', ms=7, color=colors[i],
+        #            alpha=.8, mec='k', mew=1.5, rasterized=True)
+        ax[i].text(10, 20, 'Ch %.i' % (i+1), color='white', fontsize=fs-1)
 
         # Remove time ticks of the spectrogram
         ax[i].xaxis.set_major_locator(plt.NullLocator())
@@ -93,7 +94,7 @@ def plot_multiCH_spectrogram(specs_matrix, time_arr, freq_arr, pk_idxs, all_ch_p
     for c_ax in ax:
         c_ax.tick_params(labelsize=fs)
 
-    fig.suptitle(figtitle, fontsize=fs + 2)
+    # fig.suptitle(figtitle, fontsize=fs + 2)
 
     pass
 

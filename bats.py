@@ -207,8 +207,9 @@ if __name__ == '__main__':
         # Get all the channels corresponding to the input file
         all_recs = get_all_ch(recording)
         # Get the calls
-        calls, chOfCall = get_calls_across_channels(all_recs, run_window_width=0.05, step_quotient=10, dr=50,
-                                                    plot_spec=True)
+        calls, chOfCall = get_calls_across_channels(all_recs, run_window_width=0.05, step_quotient=10, f_res=2**9,
+                                                    overlap=0.7, dr=50, plot_spec=False)
+
         chOfCall += 1  # set the channel name same as the filename
 
         # Compute the Pulse-Intervals:
@@ -259,7 +260,7 @@ if __name__ == '__main__':
             right_from_pk = np.arange(peak_f_idx[1] + 1, len(t), dtype=int)
 
             mainHarmonicTrace = []
-            db_th = 12.0
+            db_th = 20.0
             f_tol_th = 40000  # in Hz
             t_tol_th = 0.0012  # in s
 
@@ -323,6 +324,13 @@ if __name__ == '__main__':
         from multiCH import plot_call_parameter_distributions
         plot_call_parameter_distributions(call_dict, showit=False)
 
+        all_diffs = np.hstack(bout_diffs)[np.logical_and(np.hstack(bout_diffs) > 0.008, np.hstack(bout_diffs) < 0.05)]
+        all_diffs *= 1000.
+
+        from helper_functions import save_pis_and_call_parameters
+        save_pis_and_call_parameters(all_diffs, call_dict, '../phd_figures/call_parameter_arrays/')
+        quit()
+
         ################### PASTE THE CATCH SEQUENCES PIs IN ARRAY ##################################
         from call_intervals import save_pi_arrays
 
@@ -336,8 +344,6 @@ if __name__ == '__main__':
         inch_factor = 2.54
         fig, ax = plt.subplots(figsize=(20./inch_factor, 20./inch_factor))
 
-        all_diffs = np.hstack(bout_diffs)[np.logical_and(np.hstack(bout_diffs) > 0.008, np.hstack(bout_diffs) < 0.045)]
-        all_diffs *= 1000.
         binw = 1
         bins = np.arange(0, 45+binw, binw)
         ax.hist(all_diffs, bins=bins-binw/2., color='gray', edgecolor='k', alpha=.9)
