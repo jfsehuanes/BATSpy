@@ -35,6 +35,16 @@ def generate_cf_pulses(pd, pi, fl, freq, sr):
     return s
 
 
+def generate_constant_cf(fl, freq, sr):
+
+    t = np.arange(0., fl, 1./sr)
+    sin = np.sin(freq * 2 * np.pi * t)
+    sin *= .8
+    audioio.fade(sin, sr, 0.05)
+
+    return sin
+
+
 def generate_single_pulse(pd, pkf=120000., fb=180000., fe=90000., dyn_range=70, samp_freq=600000, fit_gauss=False):
 
     # calculate the width of the gauss that fits a 2ms call
@@ -80,8 +90,6 @@ def generate_single_pulse(pd, pkf=120000., fb=180000., fe=90000., dyn_range=70, 
 
 if __name__ == '__main__':
 
-    # generate fm-pulses
-
     # define parameters
     durations = np.arange(0.0005, 0.0035, 0.0005)  # pulse durations in s
     intervals = np.arange(0.005, 0.055, 0.005)  # pulse intervals in s
@@ -93,6 +101,12 @@ if __name__ == '__main__':
     dynamic_range = 70  # in db
     folder = 'test_result/'
 
+    # generate long constant cf pulse for the beaming experiment
+    audioio.write_audio(folder+'insonification_experiments/constant_80kHz_stim.wav',
+                        generate_constant_cf(file_duration, 80000, sampling_rate),
+                        sampling_rate, 'wav')
+    
+    # Generate the FM-Sweeps
     for pd in durations:
         s = generate_single_pulse(pd, pkf=peak_frequency, fb=begin_frequency, fe=end_frequency)
 
