@@ -148,7 +148,7 @@ class Batspy:
         else:
             pass
 
-    def detect_calls(self, det_range=(50000, 150000), th_between_calls=0.004, plot_debug=False,
+    def detect_calls(self, det_range=(50000, 180000), th_between_calls=0.004, plot_debug=False,
                      plot_in_spec=False, save_spec_w_calls=False):
 
         # Get an average over all frequency channels within detection range
@@ -170,8 +170,8 @@ class Batspy:
         if plot_debug:
             fig, ax = plt.subplots()
             ax.plot(self.t, av_power)
-            ax.plot(self.t[cleaned_peaks], np.ones(len(cleaned_peaks)) * np.max(av_power), 'o', ms=20, color='darkred',
-                    alpha=.8, mec='k', mew=3)
+            ax.plot(self.t[cleaned_peaks], np.ones(len(cleaned_peaks)) * np.max(av_power), 'o', ms=10, color='darkred',
+                    alpha=.8, mec='k', mew=1.5)
             ax.plot([self.t[0], self.t[-1]], [th, th], '--k', lw=2.5)
             # plt.show()
 
@@ -179,8 +179,8 @@ class Batspy:
             spec_fig, spec_ax = self.plot_spectrogram(spec_mat=self.spec_mat, f_arr=self.f, t_arr=self.t,
                                                       ret_fig_and_ax=True, showit=False)
             spec_ax = spec_ax[0]
-            spec_ax.plot(self.t[cleaned_peaks], np.ones(len(cleaned_peaks))*80, 'o', ms=20,  # plots the detection at 80kHz
-                         color='darkred', alpha=.8, mec='k', mew=3)
+            spec_ax.plot(self.t[cleaned_peaks], np.ones(len(cleaned_peaks))*80, 'o', ms=10,  # plots the detection at 80kHz
+                         color='darkred', alpha=.8, mec='k', mew=1.5)
             spec_fig.suptitle(self.file_name.split('.')[0])
             if save_spec_w_calls:
                 spec_fig.savefig('test_result/detected_calls/' + self.file_name.split('.')[0] + '.pdf')
@@ -208,13 +208,16 @@ if __name__ == '__main__':
         all_recs = get_all_ch(recording)
         # Get the calls
         calls, chOfCall = get_calls_across_channels(all_recs, run_window_width=0.05, step_quotient=10, f_res=2**9,
-                                                    overlap=0.7, dr=50, plot_spec=False)
-
+                                                    overlap=0.7, dr=70, plot_spec=True)
         chOfCall += 1  # set the channel name same as the filename
 
         # Compute the Pulse-Intervals:
         from call_intervals import get_CI_and_call_bouts, plot_call_bout_vs_CI
         bout_calls, bout_diffs = get_CI_and_call_bouts(calls)
+
+        plot_call_bout_vs_CI(calls, np.diff(calls), boutNumber=None)
+        plt.show()
+        quit()
 
         rec_dict = {enu+1: Batspy(rec, f_resolution=2**9, overlap_frac=.70, dynamic_range=70)
                     for enu, rec in enumerate(all_recs)}
@@ -322,7 +325,9 @@ if __name__ == '__main__':
         # Dictionary with call parameters should be filled here
         call_dict = {e: np.array(call_dict[e]) for e in call_dict.keys()}
         from multiCH import plot_call_parameter_distributions
-        plot_call_parameter_distributions(call_dict, showit=False)
+        plot_call_parameter_distributions(call_dict, showit=True)
+        plt.show()
+        quit()
 
         all_diffs = np.hstack(bout_diffs)[np.logical_and(np.hstack(bout_diffs) > 0.008, np.hstack(bout_diffs) < 0.05)]
         all_diffs *= 1000.
@@ -331,15 +336,7 @@ if __name__ == '__main__':
         save_pis_and_call_parameters(all_diffs, call_dict, '../phd_figures/call_parameter_arrays/')
         quit()
 
-        ################### PASTE THE CATCH SEQUENCES PIs IN ARRAY ##################################
-        from call_intervals import save_pi_arrays
-
-        outf_ends = '../../data/analysis_for_thailand/catch_t2ends.npy'
-        outf_diffs = '../../data/analysis_for_thailand/catch_diffs.npy'
-
-        embed()
-        quit()
-
+        #### ToDo: The next code snippet needs to be wrapped up in a function ####
         fs = 18
         inch_factor = 2.54
         fig, ax = plt.subplots(figsize=(20./inch_factor, 20./inch_factor))
@@ -362,20 +359,24 @@ if __name__ == '__main__':
         embed()
         quit()
 
-
-        plot_call_bout_vs_CI(bout_calls, bout_diffs)
-
-        plt.show()
-
     # Analyze SingleChannel
     elif rec_type == 's':
 
-        bat = Batspy(recording, f_resolution=2**9, overlap_frac=.70, dynamic_range=50, pcTape_rec=False)  # 2^7 = 128
+        from call_intervals import extract_pulse_sequence, save_ipi_sequence
+
+        bat = Batspy(recording, f_resolution=2**10, overlap_frac=.90, dynamic_range=70, pcTape_rec=False)  # 2^7 = 128
         bat.compute_spectrogram()
         # bat.plot_spectrogram(showit=False)
-        pows, pks = bat.detect_calls(det_range=(80000, 150000), plot_in_spec=True)
+        pows, pks = bat.detect_calls(det_range=(50000, 180000), plot_in_spec=False, plot_debug=False)
+
+        print(bat.t[pks])
+        pulse_times = extract_pulse_sequence(bat.t[pks], (1.43, 2.92), to_add=[1.5286])
+        save_ipi_sequence(pulse_times, 'approach')
+        ipis = np.diff(pulse_times)
         embed()
-        # plt.show()
+        quit()
+        # bat.plot_spectrogram()
+        plt.show()
         quit()
 
         # ToDo: Need to improve the basic call detection algorithm!
@@ -418,7 +419,7 @@ if __name__ == '__main__':
             right_from_pk = np.arange(peak_f_idx[1]+1, len(t), dtype=int)
 
             mainHarmonicTrace = []
-            db_th = 12.0
+            db_th = 15.0
             f_tol_th = 40000  # in Hz
             t_tol_th = 0.0012  # in s
 
@@ -476,26 +477,27 @@ if __name__ == '__main__':
                 call_dict['pf'].append(freqs_of_filtspec[peak_f_idx[0]])
 
                 # if (t[mainHarmonicTrace[-1][1]] - t[mainHarmonicTrace[0][1]]) * 1000. > 2.5:  # filter for calls longer than 2.5s
-                fig, ax = bat.plot_spectrogram(dec_mat=filtered_spec, f_arr=freqs_of_filtspec, t_arr=t, ret_fig_and_ax=True)
-                ax.plot(t[mainHarmonicTrace[:, 1]], freqs_of_filtspec[mainHarmonicTrace[:, 0]]/1000.,
-                        'o', ms=12, color='None', mew=3, mec='k', alpha=0.7)
-                ax.plot(t[peak_f_idx[1]], freqs_of_filtspec[peak_f_idx[0]] / 1000, 'o', ms=15, color='None', mew=4, mec='purple', alpha=0.8)
-                ax.set_title('call # %i' % c_call, fontsize=20)
-
-                import os
-                save_path = '../../data/temp_batspy/' + '/'.join(bat.file_path.split('/')[5:-1]) +\
-                            '/' + bat.file_name.split('.')[0] + '/'
-                if not os.path.exists(save_path):
-                    os.makedirs(save_path)
-
-                fig.savefig(save_path + 'fig_' + str(c_call).zfill(4) + '.pdf')
-                plt.close(fig)
+                # fig, ax = bat.plot_spectrogram(dec_mat=filtered_spec, f_arr=freqs_of_filtspec, t_arr=t, ret_fig_and_ax=True)
+                # ax.plot(t[mainHarmonicTrace[:, 1]], freqs_of_filtspec[mainHarmonicTrace[:, 0]]/1000.,
+                #         'o', ms=12, color='None', mew=3, mec='k', alpha=0.7)
+                # ax.plot(t[peak_f_idx[1]], freqs_of_filtspec[peak_f_idx[0]] / 1000, 'o', ms=15, color='None', mew=4, mec='purple', alpha=0.8)
+                # ax.set_title('call # %i' % c_call, fontsize=20)
+                #
+                # import os
+                # save_path = '../../data/temp_batspy/' + '/'.join(bat.file_path.split('/')[5:-1]) +\
+                #             '/' + bat.file_name.split('.')[0] + '/'
+                # if not os.path.exists(save_path):
+                #     os.makedirs(save_path)
+                #
+                # fig.savefig(save_path + 'fig_' + str(c_call).zfill(4) + '.pdf')
+                # plt.close(fig)
 
         # Create figure of call parameters
         call_dict = {e:  np.array(call_dict[e]) for e in call_dict.keys()}
         from multiCH import plot_call_parameter_distributions
         plot_call_parameter_distributions(call_dict)
 
-        embed()
+        # embed()
+        plt.show()
         quit()
         print('\nDONE!')

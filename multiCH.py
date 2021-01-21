@@ -233,8 +233,8 @@ def plot_call_parameter_distributions(cp_dict, showit=True):
     pf = cp_dict['pf'] / 1000.  # in kHz
     fe = cp_dict['fe'] / 1000.  # in kHz
 
-    vp1 = ax1.violinplot([cd], [1], showextrema=False, widths=.8)
-    vp2 = ax2.violinplot([fb, pf, fe], [2, 3, 4], showextrema=False, widths=.8)
+    vp1 = ax1.violinplot([cd], [1], showextrema=False, widths=.4)
+    vp2 = ax2.violinplot([fb, pf, fe], [2, 3, 4], showextrema=False, widths=.4)
 
     ax1.plot([1], [np.median(cd)], '.', color='none', mec='k', mew=2, ms=15)
     ax2.plot([2, 3, 4], [np.median(e) for e in [fb, pf, fe]], '.', color='none', mec='k', mew=2, ms=15)
@@ -269,6 +269,7 @@ def plot_call_parameter_distributions(cp_dict, showit=True):
     ax1.yaxis.label.set_color(cfb)
     ax1.yaxis.label.set_alpha(1)
     ax1.tick_params(axis='y', colors=cfb)
+    fig.tight_layout()
 
     if showit:
         plt.show()
