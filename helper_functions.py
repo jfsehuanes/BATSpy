@@ -109,3 +109,61 @@ def save_pis_and_call_parameters(new_pis, callp_dict, save_folder, overwrite=Tru
     else:
         np.save(save_folder + fe_name, callp_dict['fe'])
 
+    pass
+
+
+def specPlotKeyRelease(event):
+
+    global seq_range, to_add, to_del
+
+    fig = plt.gcf()
+    print(event.key)
+    ix, iy = event.xdata, event.ydata
+    if event.key == 'y':
+        print('stored x = %.4f in "to_add"' % ix)
+        to_add.append(ix)
+
+    elif event.key == 'n':
+        print('stored x = %.4f in "to_del"' % ix)
+        to_del.append(ix)
+
+    elif event.key == '1':
+        print('sequence starts at x = %.4f ' % ix)
+        seq_range[0] = ix
+
+    elif event.key == '0':
+        print('sequence ends at x = %.4f ' % ix)
+        seq_range[1] = ix
+
+    elif event.key == 'enter':
+        print('disconnecting plot')
+        fig.canvas.mpl_disconnect(cid)
+
+    pass
+
+
+def manualCallDetectionAdjustment(fig, calls, recording):
+
+    from call_intervals import extract_pulse_sequence, plot_call_bout_vs_CI, save_ipi_sequence
+    global seq_range, to_add, to_del
+
+    seq_range = [0, 0]
+    to_add = []
+    to_del = []
+
+    cid = fig.canvas.mpl_connect('key_release_event', specPlotKeyRelease)
+    plt.show()
+    
+    # The idea is to work with embed and then use the code snippets afterwards while in embed.
+    embed()
+
+    srch = extract_pulse_sequence(calls, valid_time_range=seq_range,
+                                  extra_deletions=to_del, to_add=to_add)
+    plot_call_bout_vs_CI(srch, np.diff(srch), boutNumber=None)
+
+    # create the header for the csv
+    r = '/'.join(recording.split('/')[-3:])
+    shortHeader = '_'.join([r[5:21], 'ch', r[-19], 'rec', r[-6:-4], 'seq_01'])
+
+    save_ipi_sequence(srch, 'approach', shortHeader)
+    exit()

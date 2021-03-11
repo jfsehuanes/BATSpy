@@ -202,7 +202,9 @@ if __name__ == '__main__':
 
     # Analyze MultiChannel
     if rec_type == 'm':
+
         from multiCH import get_all_ch, get_calls_across_channels
+        from helper_functions import manualCallDetectionAdjustment
 
         # Get all the channels corresponding to the input file
         all_recs = get_all_ch(recording)
@@ -211,14 +213,11 @@ if __name__ == '__main__':
                                                     overlap=0.7, dr=70, plot_spec=True)
         chOfCall += 1  # set the channel name same as the filename
 
-        # Compute the Pulse-Intervals:
-        from call_intervals import get_CI_and_call_bouts, plot_call_bout_vs_CI
-        bout_calls, bout_diffs = get_CI_and_call_bouts(calls)
+        # Here to switch on the interactive window for detecting the calls and add them to a csv file
+        specFig = plt.gcf()  # plot_spec needs to be True in get_calls_across_channels() function.
+        manualCallDetectionAdjustment(specFig, calls, recording)
 
-        plot_call_bout_vs_CI(calls, np.diff(calls), boutNumber=None)
-        plt.show()
-        quit()
-
+        # Here for individual call parameter extraction
         rec_dict = {enu+1: Batspy(rec, f_resolution=2**9, overlap_frac=.70, dynamic_range=70)
                     for enu, rec in enumerate(all_recs)}
         [rec_dict[e].load_data() for e in rec_dict.keys()]  # load the data in all channels
@@ -329,35 +328,10 @@ if __name__ == '__main__':
         plt.show()
         quit()
 
-        all_diffs = np.hstack(bout_diffs)[np.logical_and(np.hstack(bout_diffs) > 0.008, np.hstack(bout_diffs) < 0.05)]
-        all_diffs *= 1000.
-
-        from helper_functions import save_pis_and_call_parameters
-        save_pis_and_call_parameters(all_diffs, call_dict, '../phd_figures/call_parameter_arrays/')
+        # from helper_functions import save_pis_and_call_parameters
+        # save_pis_and_call_parameters(all_diffs, call_dict, '../phd_figures/call_parameter_arrays/')
         quit()
 
-        #### ToDo: The next code snippet needs to be wrapped up in a function ####
-        fs = 18
-        inch_factor = 2.54
-        fig, ax = plt.subplots(figsize=(20./inch_factor, 20./inch_factor))
-
-        binw = 1
-        bins = np.arange(0, 45+binw, binw)
-        ax.hist(all_diffs, bins=bins-binw/2., color='gray', edgecolor='k', alpha=.9)
-
-        fig, ax = plt.subplots(figsize=(40./inch_factor, 20./inch_factor))
-        ax.plot(bout_calls[0][17:], bout_diffs[0][17:]*1000., 'o-', color='gray', ms=17, mec='k', mew=2, lw=2, alpha=0.8)
-
-        ax.set_xlabel('Time until catch [s]', fontsize=fs)
-        ax.set_ylabel('Call Interval [ms]', fontsize=fs)
-
-        ax.tick_params(labelsize=fs-1)
-        fig.tight_layout()
-        plt.show()
-
-
-        embed()
-        quit()
 
     # Analyze SingleChannel
     elif rec_type == 's':
@@ -367,11 +341,20 @@ if __name__ == '__main__':
         bat = Batspy(recording, f_resolution=2**10, overlap_frac=.90, dynamic_range=70, pcTape_rec=False)  # 2^7 = 128
         bat.compute_spectrogram()
         # bat.plot_spectrogram(showit=False)
-        pows, pks = bat.detect_calls(det_range=(50000, 180000), plot_in_spec=False, plot_debug=False)
+        pows, pks = bat.detect_calls(det_range=(50000, 180000), plot_in_spec=True, plot_debug=False)
 
-        print(bat.t[pks])
+        # create the header for the csv
+        r = '/'.join(recording.split('/')[-3:])
+        shortHeader = '_'.join([r[5:22], 'ch', r[-19], 'rec', r[-6:-4]])
+
+        plt.show()
+
+        embed()
+        quit()
+
+        # save pulse intervals
         pulse_times = extract_pulse_sequence(bat.t[pks], (1.43, 2.92), to_add=[1.5286])
-        save_ipi_sequence(pulse_times, 'approach')
+        save_ipi_sequence(pulse_times, 'approach', shortHeader)
         ipis = np.diff(pulse_times)
         embed()
         quit()

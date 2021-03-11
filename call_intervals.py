@@ -40,7 +40,7 @@ def get_CI_and_call_bouts(call_times, bout_threshold_factor=3):
             call_times_2end.append(call_times[cb[0]: cb[1]][1:] - call_times[cb[0]: cb[1]][-1])
             bout_diffs.append(diff[cb[0]: cb[1]][1:])
 
-    return np.array(call_times_2end), np.array(bout_diffs)
+    return np.array(call_times_2end, dtype=object), np.array(bout_diffs, dtype=object)
 
 
 def plot_call_bout_vs_CI(times_to_bout_end, diffs, boutNumber=None):
@@ -65,12 +65,12 @@ def plot_call_bout_vs_CI(times_to_bout_end, diffs, boutNumber=None):
     pass
 
 
-def save_ipi_sequence(seq2append, behType):
+def save_ipi_sequence(seq2append, behType, header):
 
     import os
     import pandas as pd
 
-    valid_types = ['approach', 'attack', 'search']
+    valid_types = ['approach', 'attack', 'search', 'expectation_search']
 
     if behType not in valid_types:
         raise(ValueError('not a valid behavior type. Valid behaviors are approach, attack and search'))
@@ -80,14 +80,13 @@ def save_ipi_sequence(seq2append, behType):
     fileExists = os.path.exists(fpath)
 
     if fileExists:
-        df = pd.read_csv(fpath, header=None)
-        df[len(df.columns)] = seq2append
+        df = pd.read_csv(fpath)
+        df = pd.concat([df, pd.DataFrame({header: seq2append})], axis=1)
 
     else:
-        df = pd.DataFrame(seq2append)
-        pass
+        df = pd.DataFrame({header: seq2append})
 
-    df.to_csv(fpath, header=False, index=False)
+    df.to_csv(fpath, index=False)
     pass
 
 
@@ -101,9 +100,9 @@ def extract_pulse_sequence(pulse_times, valid_time_range, extra_deletions=[], to
         out = in_range_pulses
         pass
     else:
-        del_idx = np.zeros(len(extra_deletions))
+        del_idx = np.zeros(len(extra_deletions), dtype=int)
         for enu, ed in enumerate(extra_deletions):
-            del_idx[enu] = np.argmin(np.abs(in_range_pulses - ed))
+            del_idx[enu] = int(np.argmin(np.abs(in_range_pulses - ed)))
         out = np.delete(in_range_pulses, del_idx)
 
     # add missing pulses
