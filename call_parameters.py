@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import matplotlib.mlab as mlab
 from thunderfish.powerspectrum import decibel
 from thunderfish.dataloader import load_data
-from thunderfish.eventdetection import detect_peaks
+from thunderfish.eventdetection import detect_peaks, hist_threshold
 
 from IPython import embed
 
@@ -27,7 +27,7 @@ def find_recording(csv_head, start_path ='../../data/phd_data/avisoft_recordings
     return recs
 
 
-def best_channel(rec_ls, calls, window_width=0.008, nfft=2 ** 8, overlap_percent=0.8, thresholdTolerance=20.):
+def best_channel(rec_ls, calls, window_width=0.010, nfft=2 ** 8, overlap_percent=0.8, thresholdTolerance=20.):
 
     peak2NoiseDiff = [[] for e in np.arange(len(rec_ls))]
 
@@ -80,7 +80,7 @@ def call_window(recFile, callT, winWidth=0.008, nfft=2 ** 10, overlap_percent=0.
 
     dec_spec = decibel(s)
 
-    call_freq_range = (50000, 180000)
+    call_freq_range = (50000, 200000)
     filtered_spec = dec_spec[np.logical_and(f > call_freq_range[0], f < call_freq_range[1])]
     freqs_of_filtspec = np.linspace(call_freq_range[0], call_freq_range[-1], np.shape(filtered_spec)[0])
 
@@ -88,8 +88,6 @@ def call_window(recFile, callT, winWidth=0.008, nfft=2 ** 10, overlap_percent=0.
     noiseInds = np.sum(f > 250000)  # number of indices in frequency above the noise threshold of 250kHz
     meanNoise = np.mean(np.hstack(dec_spec[:noiseInds, :]))
     noise_floor = np.min(np.hstack(dec_spec[:noiseInds, :]))
-
-    lowest_decibel = noise_floor
 
     # get peak frequency
     peak_f_idx = np.unravel_index(filtered_spec.argmax(),
@@ -109,6 +107,19 @@ def call_window(recFile, callT, winWidth=0.008, nfft=2 ** 10, overlap_percent=0.
     # first start from peak to right
     f_ref = peak_f_idx[0]
     t_ref = peak_f_idx[1]
+
+    # ToDo: improve the call begin and end detection via a hist threshold.
+    from thunderfish.eventdetection import hist_threshold
+    fRangeSpec = s[np.logical_and(f > call_freq_range[0], f < call_freq_range[1])]
+    meanNoise = np.mean(fRangeSpec[:noiseInds, :])
+    freqHist = np.sum(fRangeSpec, axis=1)
+
+    # ToDo: Need a threshold!!
+
+
+    embed()
+    quit()
+
     mainHarmonicTrace.append([peak_f_idx[0], peak_f_idx[1]])
     for ri in right_from_pk:
         pi, _ = detect_peaks(filtered_spec[:, ri], db_th)
