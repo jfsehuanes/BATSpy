@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import matplotlib.mlab as mlab
 from thunderfish.powerspectrum import decibel
 from thunderfish.dataloader import load_data
-from thunderfish.eventdetection import detect_peaks, hist_threshold
+from thunderfish.eventdetection import detect_peaks, threshold_crossings, minmax_threshold
 
 from IPython import embed
 
@@ -66,7 +66,49 @@ def best_channel(rec_ls, calls, window_width=0.010, nfft=2 ** 8, overlap_percent
     return retCalls, retChs
 
 
-def call_window(recFile, callT, winWidth=0.008, nfft=2 ** 10, overlap_percent=0.8, plotDebug=False, dynRange=70):
+def smooth(y, box_pts):
+    box = np.ones(box_pts)/box_pts
+    y_smooth = np.convolve(y, box, mode='same')
+    return y_smooth
+
+
+def extract_call_boundaries(summed_hist, peakInx, histAxis, convBoxPoints=20, thFac=0.5):
+
+    # Create a convolution filter so that I smooth out the signal and so come around the Nullstellen-issue
+    smthHist = smooth(summed_hist, convBoxPoints)
+
+    # find the crossings of the smoothed summed histogram
+    th = minmax_threshold(smthHist, thresh_fac=thFac)
+    up, down = threshold_crossings(smthHist, th)
+
+    # if thFac == 0.2:
+    #     embed()
+    #     quit()
+
+    if len(up) == 0 or len(down) == 0:
+        print('+++++++++ WARNING!! Call boundaries not detected! +++++++++')
+        return smthHist, np.nan, np.nan
+
+    peakInTheMiddle = False
+
+    # ToDo: need to solve the issue when one of the following arrays is empty!!
+    crossInxUp = np.where(peakInx - up > 0)[0][-1]
+    crossInxDown = np.where(down - peakInx > 0)[0][0]
+
+    if crossInxUp == crossInxDown:
+        peakInTheMiddle = True
+
+    crossLeft = histAxis[up[crossInxUp]]
+    crossRight = histAxis[down[crossInxDown]]
+
+    if peakInTheMiddle:
+        return smthHist, crossRight, crossLeft
+    else:
+        print('+++++++++ WARNING!! Call peak not within call boundaries! +++++++++')
+        return smthHist, np.nan, np.nan
+
+
+def call_window(recFile, callT, winWidth=0.030, nfft=2 ** 10, overlap_percent=0.8, plotDebug=False, dynRange=70):
     # load data
     dat, sr, u = load_data(recFile)
     dat = np.hstack(dat)
@@ -84,90 +126,35 @@ def call_window(recFile, callT, winWidth=0.008, nfft=2 ** 10, overlap_percent=0.
     filtered_spec = dec_spec[np.logical_and(f > call_freq_range[0], f < call_freq_range[1])]
     freqs_of_filtspec = np.linspace(call_freq_range[0], call_freq_range[-1], np.shape(filtered_spec)[0])
 
-    # measure noise floor
-    noiseInds = np.sum(f > 250000)  # number of indices in frequency above the noise threshold of 250kHz
-    meanNoise = np.mean(np.hstack(dec_spec[:noiseInds, :]))
-    noise_floor = np.min(np.hstack(dec_spec[:noiseInds, :]))
-
     # get peak frequency
     peak_f_idx = np.unravel_index(filtered_spec.argmax(),
                                   filtered_spec.shape)
 
-    left_from_peak = np.arange(peak_f_idx[1] - 1, -1, -1, dtype=int)
-    right_from_pk = np.arange(peak_f_idx[1] + 1, len(t), dtype=int)
-
-    mainHarmonicTrace = []  # idx array that marks the trace using a coordinate system in the specgram-matrix
-    db_th = 7.0
-    f_tol_th = 20000  # in Hz
-    t_tol_th = 0.0005  # in s
-
-    freq_tolerance = np.where(np.cumsum(np.diff(freqs_of_filtspec)) > f_tol_th)[0][0]
-    time_tolerance = np.where(np.cumsum(np.diff(t)) > t_tol_th)[0][0]
-
     # first start from peak to right
-    f_ref = peak_f_idx[0]
-    t_ref = peak_f_idx[1]
+    pkfFreqIdx = peak_f_idx[0]
+    pkfTimeIdx = peak_f_idx[1]
 
-    # ToDo: improve the call begin and end detection via a hist threshold.
-    from thunderfish.eventdetection import hist_threshold
-    fRangeSpec = s[np.logical_and(f > call_freq_range[0], f < call_freq_range[1])]
-    meanNoise = np.mean(fRangeSpec[:noiseInds, :])
-    freqHist = np.sum(fRangeSpec, axis=1)
+    # need to create a time array that fits with the time of the call
+    newT = np.linspace(time[windIdx][0], time[windIdx][-1], len(t))
 
-    # ToDo: Need a threshold!!
+    # call begin and end computed using summed histograms along both the time and frequency axes of the spectrogram
+    narrowSpec = s[np.logical_and(f > call_freq_range[0], f < call_freq_range[1])]
+    # meanNoise = np.mean(narrowSpec[:noiseInds, :])
+    freqHist = np.sum(narrowSpec, axis=1)
+    timeHist = np.sum(narrowSpec, axis=0)
 
+    # ToDo: I think it's better to work with a hist_threshold for the freqs and minmax_threshold for time
+    smthFreqHist, fBegin, fEnd = extract_call_boundaries(freqHist, pkfFreqIdx, freqs_of_filtspec,
+                                                         convBoxPoints=20, thFac=0.4)
 
-    embed()
-    quit()
+    smthTimeHist, tEnd, tBegin = extract_call_boundaries(timeHist, pkfTimeIdx, newT,
+                                                         convBoxPoints=4, thFac=0.2)
 
-    mainHarmonicTrace.append([peak_f_idx[0], peak_f_idx[1]])
-    for ri in right_from_pk:
-        pi, _ = detect_peaks(filtered_spec[:, ri], db_th)
-        pi = pi[filtered_spec[pi, ri] > meanNoise]
-
-        if len(pi) > 0:
-            curr_f = pi[np.argmin(np.abs(f_ref - pi))]
-            if np.abs(ri - t_ref) > time_tolerance or np.abs(curr_f - f_ref) > freq_tolerance \
-                    or f_ref - curr_f < 0:
-                continue
-            else:
-                mainHarmonicTrace.append([curr_f, ri])
-                f_ref = curr_f
-                t_ref = ri
-        else:
-            continue
-
-    # Now from peak to left
-    f_ref = peak_f_idx[0]
-    t_ref = peak_f_idx[1]
-    for li in left_from_peak:
-        pi, _ = detect_peaks(filtered_spec[:, li], db_th)
-        pi = pi[filtered_spec[pi, li] > meanNoise]
-
-        if len(pi) > 0:
-            curr_f = pi[np.argmin(np.abs(f_ref - pi))]
-            if np.abs(li - t_ref) > time_tolerance or np.abs(curr_f - f_ref) > freq_tolerance \
-                    or curr_f - f_ref < 0:
-                continue
-            else:
-                mainHarmonicTrace.insert(0, [curr_f, li])
-                f_ref = curr_f
-                t_ref = li
-        else:
-            continue
-
-    mainHarmonicTrace = np.array(mainHarmonicTrace)
-
-    # now save the parameters!
-    callEnd = t[mainHarmonicTrace[-1][1]]
-    callBeg = t[mainHarmonicTrace[0][1]]
-    callDur = callEnd - callBeg
-
-    freqBeg = freqs_of_filtspec[mainHarmonicTrace[0][0]]
-    freqEnd = freqs_of_filtspec[mainHarmonicTrace[-1][0]]
-    peakFreq = freqs_of_filtspec[peak_f_idx[0]]
+    cDur = tEnd - tBegin
+    pkFreq = freqs_of_filtspec[peak_f_idx[0]]
 
     # debug plot
+    # ToDo: add the summed histograms to the DeBug plot
     if plotDebug:
         inch_factor = 2.54
         fs = 24
@@ -178,15 +165,12 @@ def call_window(recFile, callT, winWidth=0.008, nfft=2 ** 10, overlap_percent=0.
         ax1 = fig.add_subplot(gs[1, :-1])
         ax2 = fig.add_subplot(gs[0:-1, -1])
 
-        # need to create a time array that fits with the time of the call
-        plotT = np.linspace(time[windIdx][0], time[windIdx][-1], len(t))
-
         # define max and min of the spectrogram to be plotted
         maxSpec = np.max(filtered_spec)
         minSpec = np.min(filtered_spec - maxSpec)
 
         im = ax0.imshow(filtered_spec - maxSpec, cmap='jet',
-                        extent=[plotT[0], plotT[-1],
+                        extent=[newT[0], newT[-1],
                                 int(freqs_of_filtspec[0]) / 1000,
                                 int(freqs_of_filtspec[-1]) / 1000],  # divide by 1000 for kHz
                         aspect='auto', interpolation='hanning', origin='lower', alpha=0.7, vmin=minSpec - minSpec/4,
@@ -195,9 +179,9 @@ def call_window(recFile, callT, winWidth=0.008, nfft=2 ** 10, overlap_percent=0.
         cb = fig.colorbar(im, cax=ax2)
 
         # now plot the detected parameters inside the spectrogram
-        ax0.plot(plotT[mainHarmonicTrace[:, 1]], freqs_of_filtspec[mainHarmonicTrace[:, 0]] / 1000,
+        ax0.plot([tBegin, tEnd], np.array([fBegin, fEnd]) / 1000,
                  'ow', ms=10, mec='k', mew=2)
-        ax0.plot(plotT[peak_f_idx[1]], freqs_of_filtspec[peak_f_idx[0]] / 1000,
+        ax0.plot(newT[peak_f_idx[1]], freqs_of_filtspec[peak_f_idx[0]] / 1000,
                  'or', ms=13, mec='k', mew=2)
 
         cb.set_label('dB', fontsize=fs)
@@ -223,7 +207,7 @@ def call_window(recFile, callT, winWidth=0.008, nfft=2 ** 10, overlap_percent=0.
         # Remove time xticks of the spectrogram
         ax0.xaxis.set_major_locator(plt.NullLocator())
 
-    return callDur, freqBeg, freqEnd, peakFreq
+    return cDur, fBegin, fEnd, pkFreq
 
 
 if __name__ == '__main__':
@@ -250,6 +234,7 @@ if __name__ == '__main__':
         peakFreq = np.zeros(len(calls))
 
         for enu, callT in enumerate(calls):
+            print("Call %i of %i..." % (enu+1, len(calls)))
             # compute a high res spectrogram of a defined window length
             dur, fb, fe, pf = call_window(recNames[bch[enu]], callT, plotDebug=True)
 
