@@ -6,7 +6,8 @@ import matplotlib.pyplot as plt
 import matplotlib.mlab as mlab
 from thunderfish.powerspectrum import decibel
 from thunderfish.dataloader import load_data
-from thunderfish.eventdetection import detect_peaks, threshold_crossings, minmax_threshold
+from thunderfish.eventdetection import detect_peaks, threshold_crossings, minmax_threshold, hist_threshold,\
+    percentile_threshold
 
 from IPython import embed
 
@@ -72,43 +73,53 @@ def smooth(y, box_pts):
     return y_smooth
 
 
-def extract_call_boundaries(summed_hist, peakInx, histAxis, convBoxPoints=20, thFac=0.5):
+def extract_freqs():
 
-    # Create a convolution filter so that I smooth out the signal and so come around the Nullstellen-issue
+    pass
+
+
+def extract_call_boundaries(summed_hist, peakInx, histAxis, threshType=None, convBoxPoints=None, thFac=0.4):
+
+    if convBoxPoints == None:
+        convBoxPoints = int(np.ceil(0.15 * len(summed_hist)))
+    # Create a convolution filter for smoothing out the signal and so come around the Nullstellen-issue
     smthHist = smooth(summed_hist, convBoxPoints)
 
     # find the crossings of the smoothed summed histogram
-    th = minmax_threshold(smthHist, thresh_fac=thFac)
+    if threshType == 'minmax':
+        th = minmax_threshold(smthHist, thresh_fac=thFac)
+    elif threshType == 'hist':
+        th, _ = hist_threshold(smthHist, thresh_fac=thFac)
+    else:
+        raise(TypeError("not a valid threshold type. Please specify between 'minmax' and 'hist'"))
+
     up, down = threshold_crossings(smthHist, th)
 
-    # if thFac == 0.2:
-    #     embed()
-    #     quit()
-
-    if len(up) == 0 or len(down) == 0:
+    if th >= np.max(smthHist):
         print('+++++++++ WARNING!! Call boundaries not detected! +++++++++')
-        return smthHist, np.nan, np.nan
+        return smthHist, th, np.nan, np.nan
 
+    elif len(up) == 0 or len(down) == 0:
+        print('increasing threshold!')
+        extract_call_boundaries(summed_hist, peakInx, histAxis, threshType='minmax', convBoxPoints=convBoxPoints,
+                                thFac=thFac*2)
+
+    # check whether the peak time index lies within the detected time call boundaries
     peakInTheMiddle = False
-
-    # ToDo: need to solve the issue when one of the following arrays is empty!!
     crossInxUp = np.where(peakInx - up > 0)[0][-1]
     crossInxDown = np.where(down - peakInx > 0)[0][0]
 
     if crossInxUp == crossInxDown:
         peakInTheMiddle = True
 
-    crossLeft = histAxis[up[crossInxUp]]
-    crossRight = histAxis[down[crossInxDown]]
-
     if peakInTheMiddle:
-        return smthHist, crossRight, crossLeft
+        return smthHist, th, up[crossInxUp], down[crossInxDown]
     else:
         print('+++++++++ WARNING!! Call peak not within call boundaries! +++++++++')
-        return smthHist, np.nan, np.nan
+        return smthHist, th, np.nan, np.nan
 
 
-def call_window(recFile, callT, winWidth=0.030, nfft=2 ** 10, overlap_percent=0.8, plotDebug=False, dynRange=70):
+def call_window(recFile, callT, winWidth=0.030, nfft=2 ** 9, overlap_percent=0.6, plotDebug=False, dynRange=70):
     # load data
     dat, sr, u = load_data(recFile)
     dat = np.hstack(dat)
@@ -144,14 +155,29 @@ def call_window(recFile, callT, winWidth=0.030, nfft=2 ** 10, overlap_percent=0.
     timeHist = np.sum(narrowSpec, axis=0)
 
     # ToDo: I think it's better to work with a hist_threshold for the freqs and minmax_threshold for time
-    smthFreqHist, fBegin, fEnd = extract_call_boundaries(freqHist, pkfFreqIdx, freqs_of_filtspec,
-                                                         convBoxPoints=20, thFac=0.4)
+    # smthFreqHist, fBegin, fEnd = extract_call_boundaries(freqHist, pkfFreqIdx, freqs_of_filtspec, threshType='minmax',
+    #                                                      thFac=0.4)
 
-    smthTimeHist, tEnd, tBegin = extract_call_boundaries(timeHist, pkfTimeIdx, newT,
-                                                         convBoxPoints=4, thFac=0.2)
+    try:
+        smthTimeHist, smthTHistTh, tLeft, tRight = extract_call_boundaries(timeHist, pkfTimeIdx, newT,
+                                                                       threshType='minmax', thFac=0.4)
+    except:
+        embed()
+        exit()
 
+    # now detect the frequency values
+    smthFreqHist, smthFHistTh, fRight, fLeft = extract_call_boundaries(freqHist, pkfFreqIdx, freqs_of_filtspec,
+                                                                       threshType='minmax', thFac=0.4)
+    # embed()
+    # exit()
+
+    fBegin = freqs_of_filtspec[fLeft]
+    fEnd = freqs_of_filtspec[fRight]
+
+    tBegin = newT[tLeft]
+    tEnd = newT[tRight]
     cDur = tEnd - tBegin
-    pkFreq = freqs_of_filtspec[peak_f_idx[0]]
+    pkFreq = freqs_of_filtspec[pkfFreqIdx]
 
     # debug plot
     # ToDo: add the summed histograms to the DeBug plot
@@ -176,7 +202,8 @@ def call_window(recFile, callT, winWidth=0.030, nfft=2 ** 10, overlap_percent=0.
                         aspect='auto', interpolation='hanning', origin='lower', alpha=0.7, vmin=minSpec - minSpec/4,
                         vmax=0.)
 
-        cb = fig.colorbar(im, cax=ax2)
+        ax2.plot(smthFreqHist, freqs_of_filtspec/1000, 'k', lw=2)
+        ax2.plot(np.ones(len(freqs_of_filtspec))*smthFHistTh, freqs_of_filtspec/1000, '--b', lw=2)
 
         # now plot the detected parameters inside the spectrogram
         ax0.plot([tBegin, tEnd], np.array([fBegin, fEnd]) / 1000,
@@ -184,12 +211,10 @@ def call_window(recFile, callT, winWidth=0.030, nfft=2 ** 10, overlap_percent=0.
         ax0.plot(newT[peak_f_idx[1]], freqs_of_filtspec[peak_f_idx[0]] / 1000,
                  'or', ms=13, mec='k', mew=2)
 
-        cb.set_label('dB', fontsize=fs)
         ax0.set_ylabel('Frequency [kHz]', fontsize=fs + 1)
 
-        ax1.set_ylabel('Amplitude [a.u.]', fontsize=fs + 1)
         ax1.set_xlabel('Time [sec]', fontsize=fs + 1)
-        ax0.set_xlabel('Time [sec]', fontsize=fs + 1)
+        # ax0.set_xlabel('Time [sec]', fontsize=fs + 1)
 
         for c_ax in [ax0, ax1, ax2]:
             c_ax.tick_params(labelsize=fs)
@@ -197,8 +222,8 @@ def call_window(recFile, callT, winWidth=0.030, nfft=2 ** 10, overlap_percent=0.
         ax0.set_ylim(int(freqs_of_filtspec[0]) / 1000, int(freqs_of_filtspec[-1]) / 1000)
 
         # Plot the soundwave underneath the spectrogram
-        ax1.set_facecolor('black')
-        ax1.plot(time[windIdx], dat[windIdx], color='yellow', lw=2, rasterized=True)
+        ax1.plot(newT, smthTimeHist, 'k', lw=2)
+        ax1.plot(newT, np.ones(len(newT)) * smthTHistTh, '--b', lw=2)
 
         # Share the time axis of spectrogram and raw sound trace
         ax1.get_shared_x_axes().join(ax0, ax1)
