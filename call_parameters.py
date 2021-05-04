@@ -66,7 +66,7 @@ def best_channel(rec_ls, calls, window_width=0.010, nfft=2 ** 8, overlap_percent
     return retCalls, retChs
 
 
-def extract_call_boundaries(hist, meanNoise, dbTh=-10):
+def extract_call_boundaries(hist, meanNoise, dbTh=-15):
 
     dbHist = decibel(hist, None)
 
@@ -96,7 +96,7 @@ def call_window(dat, sr, callT, winWidth=0.030, pkWidth=0.005, nfft=2 ** 7, over
     s, f, t = mlab.specgram(dat[windIdx], Fs=sr, NFFT=nfft,
                             noverlap=int(overlap_percent * nfft))  # Compute a high-res spectrogram of the window
 
-    call_freq_range = (50000, 200000)
+    call_freq_range = (90000, 190000)
     filtered_spec = s[np.logical_and(f > call_freq_range[0], f < call_freq_range[1])]
     freqs_of_filtspec = np.linspace(call_freq_range[0], call_freq_range[-1], np.shape(filtered_spec)[0])
 
@@ -126,35 +126,26 @@ def call_window(dat, sr, callT, winWidth=0.030, pkWidth=0.005, nfft=2 ** 7, over
     peak_f_idx = np.unravel_index(narrowSpec.argmax(),
                                   narrowSpec.shape)
 
-    # first start from peak to right
+    # define the indices of the peak frequency
     pkfFreqIdx = peak_f_idx[0]
     pkfTimeIdx = peak_f_idx[1]
 
-    dbTimeHist, dbTimeTh, tLeft, tRight = extract_call_boundaries(timeHist, meanNoise)
+    missedDetection = False
+    dbTimeHist, dbTimeTh, tLeft, tRight = extract_call_boundaries(timeHist, meanNoise, dbTh=-12)
 
     # now detect the frequency values
-    dbFreqHist, dbFreqTh, fRight, fLeft = extract_call_boundaries(freqHist, meanNoise)
+    dbFreqHist, dbFreqTh, fRight, fLeft = extract_call_boundaries(freqHist, meanNoise, dbTh=-13)
 
     if np.any(np.isnan([fRight, fLeft, tRight, tLeft])):
-        print('+++++++++++++++No boundaries found. inserting nans!!+++++++++++++')
-        return np.nan, np.nan, np.nan, np.nan
-
-    fBegin = freqs_of_filtspec[fLeft]
-    fEnd = freqs_of_filtspec[fRight]
-
-    tBegin = narrowT[tLeft]
-    tEnd = narrowT[tRight]
-    cDur = tEnd - tBegin
-    pkFreq = freqs_of_filtspec[pkfFreqIdx]
+        missedDetection = True
 
     # debug plot
-    # ToDo: Plot the mean noise floor in dB!!
     if plotDebug:
         inch_factor = 2.54
         fs = 24
 
         fig = plt.figure(constrained_layout=True, figsize=(56. / inch_factor, 30. / inch_factor))
-        gs = fig.add_gridspec(2, 3, height_ratios=(4, 1), width_ratios=(4.85, 4.85, .3))
+        gs = fig.add_gridspec(2, 3, height_ratios=(4, 1), width_ratios=(4.85, 4.85, 2))
         ax0 = fig.add_subplot(gs[0, :-1])
         ax1 = fig.add_subplot(gs[1, :-1])
         ax2 = fig.add_subplot(gs[0:-1, -1])
@@ -170,8 +161,13 @@ def call_window(dat, sr, callT, winWidth=0.030, pkWidth=0.005, nfft=2 ** 7, over
         ax2.plot(np.ones(len(freqs_of_filtspec))*dbFreqTh, freqs_of_filtspec/1000, '--b', lw=2)
 
         # now plot the detected parameters inside the spectrogram
-        ax0.plot([tBegin, tEnd], np.array([fBegin, fEnd]) / 1000,
-                 'ow', ms=10, mec='k', mew=2)
+        if not missedDetection:
+            tBegin = narrowT[tLeft]
+            tEnd = narrowT[tRight]
+            fBegin = freqs_of_filtspec[fLeft]
+            fEnd = freqs_of_filtspec[fRight]
+            ax0.plot([tBegin, tEnd], np.array([fBegin, fEnd]) / 1000, 'ow', ms=10, mec='k', mew=2)
+
         ax0.plot(narrowT[peak_f_idx[1]], freqs_of_filtspec[peak_f_idx[0]] / 1000,
                  'or', ms=13, mec='k', mew=2)
 
@@ -194,13 +190,25 @@ def call_window(dat, sr, callT, winWidth=0.030, pkWidth=0.005, nfft=2 ** 7, over
         # Remove time xticks of the spectrogram
         ax0.xaxis.set_major_locator(plt.NullLocator())
 
-    return cDur, fBegin, fEnd, pkFreq
+    if missedDetection:
+        print('+++++++++++++++No boundaries found. inserting nans!!+++++++++++++')
+        return np.nan, np.nan, np.nan, np.nan
+    else:
+        if not plotDebug:
+            fBegin = freqs_of_filtspec[fLeft]
+            fEnd = freqs_of_filtspec[fRight]
+            tBegin = narrowT[tLeft]
+            tEnd = narrowT[tRight]
+        cDur = tEnd - tBegin
+        pkFreq = freqs_of_filtspec[pkfFreqIdx]
+        return cDur, fBegin, fEnd, pkFreq
 
 
 if __name__ == '__main__':
 
     # read the csv
     csv = pd.read_csv('tmp/approach.csv')
+    path = '../../data/phd_data/tmp_call_figures/approach/'
 
     # loop through all sequences in the csv
     for seqInd in range(csv.shape[1]):
@@ -219,26 +227,52 @@ if __name__ == '__main__':
         freqBeg = np.zeros(len(calls))
         freqEnd = np.zeros(len(calls))
         peakFreq = np.zeros(len(calls))
-
+        callsMask = np.zeros(len(calls))
         enu = 0
         for channel in set(bch):
             # load data
             dat, sr, u = load_data(recNames[channel])
             dat = np.hstack(dat)
 
-            for n, callT in enumerate(calls[bch==channel]):
+            # ToDo: need to find a way to restructure the calls. They're being analyzed shuffled
+            # Create a csv file with the sequence name as title and then the columns time, bch, call duration,
+            # fBeg, fEnd, and pkfreq
 
-                print('analyzing call %i' %(n+1))
+            # embed()
+            # quit()
+
+            for callT in calls[bch == channel]:
+
+                print('analyzing call %i' % (enu+1))  # calls are not analyzed in order ;)
 
                 # compute a high res spectrogram of a defined window length
-
                 dur, fb, fe, pf = call_window(dat, sr, callT, plotDebug=True)
 
+                # save the debug figure
+                fig = plt.gcf()
+                fig.suptitle(seqName + '__CALL#' + '{:03}'.format(enu + 1), fontsize=14)
+                fig.savefig(path + 'plots/' + '__'.join(seqName.split('/')) + '__CALL#'+'{:03}'.format(enu+1)+'.pdf')
+                plt.close(fig)
+
+                # save the parameters
                 callDur[enu] = dur
                 freqBeg[enu] = fb
                 freqEnd[enu] = fe
                 peakFreq[enu] = pf
+                callsMask[enu] = callT
+
                 enu += 1
 
-    embed()
+        # Reorder the arrays and create a csv
+        sortedInxs = np.argsort(callsMask)
+        paramsdf = pd.DataFrame({'callTime': callsMask[sortedInxs], 'bch': bch[sortedInxs],
+                                 'callDur': callDur[sortedInxs], 'fBeg': freqBeg[sortedInxs],
+                                 'fEnd': freqEnd[sortedInxs], 'pkfreq': peakFreq[sortedInxs]})
+        paramsdf.to_csv(path_or_buf=path + 'csvs/' + '__'.join(seqName.split('/')) + '.csv', index=False)
+        
+
+        # ToDo: Find a way to optimize the code using parallel computing.
+        # ToDo: Make this also compatible with batspy
+
+    print('FINISSSEEEDD')
     quit()
