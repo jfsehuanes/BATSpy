@@ -11,7 +11,7 @@ from thunderfish.eventdetection import threshold_crossings, remove_events
 from IPython import embed
 
 
-def find_recording(csv_head, start_path ='../../data/phd_data/avisoft_recordings_in_Macaregua/02_recordings_2019/'):
+def find_recording(csv_head, start_path='../../data/phd_data/avisoft_recordings_in_Macaregua/02_recordings_2019/'):
 
     date = '*' + csv_head.split('/')[0] + '/'
     bat = csv_head.split('/')[1].split('_')[0] + '/'
@@ -24,7 +24,7 @@ def find_recording(csv_head, start_path ='../../data/phd_data/avisoft_recordings
         raise(ValueError('Something went wrong and I could not find the four channels of the recording you whish '
                          'to analyze'))
 
-    return recs
+    return np.sort(recs)
 
 
 def best_channel(rec_ls, calls, window_width=0.010, nfft=2 ** 8, overlap_percent=0.8, thresholdTolerance=20.):
