@@ -4,6 +4,7 @@ warnings.filterwarnings("ignore", category=RuntimeWarning)
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.mlab as mlab
+import pandas as pd
 
 from sklearn.linear_model import LinearRegression as linreg
 from thunderfish.dataloader import load_data
@@ -11,6 +12,8 @@ from thunderfish.powerspectrum import spectrogram, decibel
 from thunderfish.eventdetection import detect_peaks, percentile_threshold
 from thunderfish.harmonics import harmonic_groups
 from thunderfish.powerspectrum import psd
+
+from call_parameters import call_window
 
 from IPython import embed
 
@@ -210,12 +213,12 @@ if __name__ == '__main__':
         all_recs = get_all_ch(recording)
         # Get the calls
         calls, chOfCall = get_calls_across_channels(all_recs, run_window_width=0.05, step_quotient=10, f_res=2**9,
-                                                    overlap=0.7, dr=70, plot_spec=True)
+                                                    overlap=0.7, dr=70, plot_spec=False)
         chOfCall += 1  # set the channel name same as the filename
 
-        # Here to switch on the interactive window for detecting the calls and add them to a csv file
-        specFig = plt.gcf()  # plot_spec needs to be True in get_calls_across_channels() function.
-        manualCallDetectionAdjustment(specFig, calls, recording)
+        # # Here to switch on the interactive window for detecting the calls and add them to a csv file
+        # specFig = plt.gcf()  # plot_spec needs to be True in get_calls_across_channels() function.
+        # manualCallDetectionAdjustment(specFig, calls, recording)
 
         # Here for individual call parameter extraction
         rec_dict = {enu+1: Batspy(rec, f_resolution=2**9, overlap_frac=.70, dynamic_range=70)
@@ -231,95 +234,52 @@ if __name__ == '__main__':
         call_dict = {'cb': [], 'ce': [], 'fb': [], 'fe': [], 'pf': [], 'call_number': []}
         print('\nCalls extracted, proceeding to loop through %.i detected calls...\n' % len(calls))
 
-        for c_call in range(len(calls)):
-            c_ch = chOfCall[c_call]
-            nfft = 2 ** 8
-            call_w_idx = np.logical_and(time >= calls[c_call] - window_width / 2.,
-                                        time <= calls[c_call] + window_width / 2.)
-            trace = rec_dict[c_ch].recording_trace[call_w_idx]
+        callDur = np.zeros(len(calls))
+        freqBeg = np.zeros(len(calls))
+        freqEnd = np.zeros(len(calls))
+        peakFreq = np.zeros(len(calls))
+        callsMask = np.zeros(len(calls))
+        enu = 0
 
-            s, f, t = mlab.specgram(trace, Fs=rec_dict[c_ch].sampling_rate, NFFT=nfft,
-                                    noverlap=int(0.8 * nfft))  # Compute a high-res spectrogram of the window
+        for channel in set(chOfCall):
+            # load data
+            dat, sr, u = load_data(all_recs[channel-1])
+            dat = np.hstack(dat)
 
-            dec_spec = decibel(s)
+            for callT in calls[chOfCall == channel]:
 
-            call_freq_range = (50000, 250000)
-            filtered_spec = dec_spec[np.logical_and(f > call_freq_range[0], f < call_freq_range[1])]
-            freqs_of_filtspec = np.linspace(call_freq_range[0], call_freq_range[-1], np.shape(filtered_spec)[0])
+                print('analyzing call %i' % (enu+1))  # calls are not analyzed in order ;)
 
-            # measure noise floor
-            noiseEdge = int(np.floor(0.002 / np.diff(t)[0]))
-            noise_floor = np.max(np.hstack((filtered_spec[:, :noiseEdge], filtered_spec[:, -noiseEdge:]))) + 2
+                # compute a high res spectrogram of a defined window length
+                dur, fb, fe, pf = call_window(dat, sr, callT, plotDebug=True)
 
-            lowest_decibel = noise_floor
+                # save the parameters
+                callDur[enu] = dur
+                freqBeg[enu] = fb
+                freqEnd[enu] = fe
+                peakFreq[enu] = pf
+                callsMask[enu] = callT
 
-            # get peak frequency
-            peak_f_idx = np.unravel_index(filtered_spec.argmax(),
-                                          filtered_spec.shape)
+                # save the debug figure
+                fig = plt.gcf()
+                fig.suptitle('__CALL#' + '{:03}'.format(enu + 1), fontsize=14)
+                fig.savefig(
+                    'tmp/plots/' + 'CALL#' + '{:03}'.format(enu + 1) + '.pdf')
+                plt.close(fig)
 
-            # ToDo: Make a function out of this in order to avoid code copy-paste
-            left_from_peak = np.arange(peak_f_idx[1] - 1, -1, -1, dtype=int)
-            right_from_pk = np.arange(peak_f_idx[1] + 1, len(t), dtype=int)
+                enu += 1
 
-            mainHarmonicTrace = []
-            db_th = 20.0
-            f_tol_th = 40000  # in Hz
-            t_tol_th = 0.0012  # in s
+        # Reorder the arrays and create a csv
+        path = 'tmp/call_params/'
+        sortedInxs = np.argsort(callsMask)
+        paramsdf = pd.DataFrame({'callTime': callsMask[sortedInxs], 'bch': chOfCall[sortedInxs],
+                                 'callDur': callDur[sortedInxs], 'fBeg': freqBeg[sortedInxs],
+                                 'fEnd': freqEnd[sortedInxs], 'pkfreq': peakFreq[sortedInxs]})
+        paramsdf.to_csv(path_or_buf=path + '__'.join(recording.split('/')[2:]) + '.csv', index=False)
+        print('CHE ACABOOO')
+        exit()
 
-            freq_tolerance = np.where(np.cumsum(np.diff(freqs_of_filtspec)) > f_tol_th)[0][0]
-            time_tolerance = np.where(np.cumsum(np.diff(t)) > t_tol_th)[0][0]
 
-            # first start from peak to right
-            f_ref = peak_f_idx[0]
-            t_ref = peak_f_idx[1]
-            mainHarmonicTrace.append([peak_f_idx[0], peak_f_idx[1]])
-            for ri in right_from_pk:
-                pi, _ = detect_peaks(filtered_spec[:, ri], db_th)
-                pi = pi[filtered_spec[pi, ri] > lowest_decibel]
-
-                if len(pi) > 0:
-                    curr_f = pi[np.argmin(np.abs(f_ref - pi))]
-                    if np.abs(ri - t_ref) > time_tolerance or np.abs(curr_f - f_ref) > freq_tolerance \
-                            or f_ref - curr_f < 0:
-                        continue
-                    else:
-                        mainHarmonicTrace.append([curr_f, ri])
-                        f_ref = curr_f
-                        t_ref = ri
-                else:
-                    continue
-
-            # Now from peak to left
-            f_ref = peak_f_idx[0]
-            t_ref = peak_f_idx[1]
-            for li in left_from_peak:
-                pi, _ = detect_peaks(filtered_spec[:, li], db_th)
-                pi = pi[filtered_spec[pi, li] > lowest_decibel]
-
-                if len(pi) > 0:
-                    curr_f = pi[np.argmin(np.abs(f_ref - pi))]
-                    if np.abs(li - t_ref) > time_tolerance or np.abs(curr_f - f_ref) > freq_tolerance \
-                            or curr_f - f_ref < 0:
-                        continue
-                    else:
-                        mainHarmonicTrace.insert(0, [curr_f, li])
-                        f_ref = curr_f
-                        t_ref = li
-                else:
-                    continue
-
-            mainHarmonicTrace = np.array(mainHarmonicTrace)
-
-            # if np.logical_and(calls[c_call] > 1.5, calls[c_call] < 2.6):
-
-            if np.abs(noise_floor - filtered_spec[peak_f_idx]) > db_th:# \
-                    #and (t[mainHarmonicTrace[-1][1]] - t[mainHarmonicTrace[0][1]]) * 1000. > 1.2:
-                call_dict['call_number'].append(c_call)
-                call_dict['cb'].append(t[mainHarmonicTrace[0][1]])
-                call_dict['ce'].append(t[mainHarmonicTrace[-1][1]])
-                call_dict['fb'].append(freqs_of_filtspec[mainHarmonicTrace[0][0]])
-                call_dict['fe'].append(freqs_of_filtspec[mainHarmonicTrace[-1][0]])
-                call_dict['pf'].append(freqs_of_filtspec[peak_f_idx[0]])
 
         # Dictionary with call parameters should be filled here
         call_dict = {e: np.array(call_dict[e]) for e in call_dict.keys()}

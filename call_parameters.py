@@ -139,6 +139,10 @@ def call_window(dat, sr, callT, winWidth=0.030, pkWidth=0.005, nfft=2 ** 7, over
     if np.any(np.isnan([fRight, fLeft, tRight, tLeft])):
         missedDetection = True
 
+    # control that the peak frequency lies in the middle of tLeft-tRight and fLeft-fRight
+    if not fLeft >= pkfFreqIdx >= fRight and tLeft <= pkfTimeIdx <= tRight:
+        missedDetection = True
+
     # debug plot
     if plotDebug:
         inch_factor = 2.54
@@ -191,7 +195,7 @@ def call_window(dat, sr, callT, winWidth=0.030, pkWidth=0.005, nfft=2 ** 7, over
         ax0.xaxis.set_major_locator(plt.NullLocator())
 
     if missedDetection:
-        print('+++++++++++++++No boundaries found. inserting nans!!+++++++++++++')
+        print('+++++++++++++++No boundaries found or weird things were detected. inserting nans!!+++++++++++++')
         return np.nan, np.nan, np.nan, np.nan
     else:
         if not plotDebug:
@@ -271,8 +275,7 @@ if __name__ == '__main__':
         paramsdf.to_csv(path_or_buf=path + 'csvs/' + '__'.join(seqName.split('/')) + '.csv', index=False)
         
 
-        # ToDo: Find a way to optimize the code using parallel computing.
-        # ToDo: Make this also compatible with batspy
+        # ToDo: Optimize the code using parallel computing.
 
     print('FINISSSEEEDD')
     quit()
