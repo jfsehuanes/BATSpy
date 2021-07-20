@@ -156,6 +156,7 @@ def manualCallDetectionAdjustment(fig, calls, recording):
     
     # The idea is to work with embed and then use the code snippets afterwards while in embed.
     embed()
+    quit()
 
     srch = extract_pulse_sequence(calls, valid_time_range=seq_range,
                                   extra_deletions=to_del, to_add=to_add)
@@ -165,5 +166,5 @@ def manualCallDetectionAdjustment(fig, calls, recording):
     r = '/'.join(recording.split('/')[-3:])
     shortHeader = '_'.join([r[5:21], 'ch', r[-19], 'rec', r[-6:-4], 'seq_01'])
 
-    save_ipi_sequence(srch, 'approach', shortHeader)
+    save_ipi_sequence(srch, 'glint_machine', shortHeader)
     exit()

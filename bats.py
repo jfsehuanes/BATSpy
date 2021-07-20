@@ -213,12 +213,13 @@ if __name__ == '__main__':
         all_recs = get_all_ch(recording)
         # Get the calls
         calls, chOfCall = get_calls_across_channels(all_recs, run_window_width=0.05, step_quotient=10, f_res=2**9,
-                                                    overlap=0.7, dr=70, plot_spec=False)
+                                                    overlap=0.7, dr=70, plot_spec=True)
+
         chOfCall += 1  # set the channel name same as the filename
 
-        # # Here to switch on the interactive window for detecting the calls and add them to a csv file
-        # specFig = plt.gcf()  # plot_spec needs to be True in get_calls_across_channels() function.
-        # manualCallDetectionAdjustment(specFig, calls, recording)
+        # Here to switch on the interactive window for detecting the calls and add them to a csv file
+        specFig = plt.gcf()  # plot_spec needs to be True in get_calls_across_channels() function.
+        manualCallDetectionAdjustment(specFig, calls, recording)
 
         # Here for individual call parameter extraction
         rec_dict = {enu+1: Batspy(rec, f_resolution=2**9, overlap_frac=.70, dynamic_range=70)

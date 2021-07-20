@@ -11,7 +11,7 @@ from thunderfish.eventdetection import threshold_crossings, remove_events
 from IPython import embed
 
 
-def find_recording(csv_head, start_path='../../data/phd_data/avisoft_recordings_in_Macaregua/02_recordings_2019/'):
+def find_recording(csv_head, start_path='../../data/phd_data/avisoft_recordings_in_Macaregua/01_recordings_2018/'):
 
     date = '*' + csv_head.split('/')[0] + '/'
     bat = csv_head.split('/')[1].split('_')[0] + '/'
@@ -21,7 +21,7 @@ def find_recording(csv_head, start_path='../../data/phd_data/avisoft_recordings_
     recs = glob.glob(fullString)
 
     if len(recs) != 4:
-        raise(ValueError('Something went wrong and I could not find the four channels of the recording you whish '
+        raise(ValueError('Something went wrong and I could not find the four channels of the recording you wish '
                          'to analyze'))
 
     return np.sort(recs)
@@ -71,13 +71,13 @@ def extract_call_boundaries(hist, meanNoise, dbTh=-15):
     dbHist = decibel(hist, None)
 
     meanNoisedB = decibel(meanNoise, np.max(hist))
-    if dbTh - meanNoisedB < 5:  # meanNoisedB has to be at least 5 dB below threshold
+    if dbTh - meanNoisedB < 7:  # meanNoisedB has to be at least 7 dB below threshold
         print('+++++++++ noise floor too close to threshold. Ignoring this call +++++++++')
         return dbHist, dbTh, np.nan, np.nan
 
     up, down = threshold_crossings(dbHist, dbTh)
 
-    up, down = remove_events(up, down, 2)
+    up, down = remove_events(up, down, 3)
 
     if len(up) == 0 or len(down) == 0:
         print('+++++++++ No threshold crossings found! +++++++++')
@@ -96,7 +96,7 @@ def call_window(dat, sr, callT, winWidth=0.030, pkWidth=0.005, nfft=2 ** 7, over
     s, f, t = mlab.specgram(dat[windIdx], Fs=sr, NFFT=nfft,
                             noverlap=int(overlap_percent * nfft))  # Compute a high-res spectrogram of the window
 
-    call_freq_range = (90000, 190000)
+    call_freq_range = (70000, 190000)
     filtered_spec = s[np.logical_and(f > call_freq_range[0], f < call_freq_range[1])]
     freqs_of_filtspec = np.linspace(call_freq_range[0], call_freq_range[-1], np.shape(filtered_spec)[0])
 
@@ -211,8 +211,8 @@ def call_window(dat, sr, callT, winWidth=0.030, pkWidth=0.005, nfft=2 ** 7, over
 if __name__ == '__main__':
 
     # read the csv
-    csv = pd.read_csv('tmp/approach.csv')
-    path = '../../data/phd_data/tmp_call_figures/approach/'
+    csv = pd.read_csv('tmp/long_search.csv')
+    path = '../../data/phd_data/tmp_call_figures/long_search/'
 
     # loop through all sequences in the csv
     for seqInd in range(csv.shape[1]):

@@ -70,10 +70,11 @@ def save_ipi_sequence(seq2append, behType, header):
     import os
     import pandas as pd
 
-    valid_types = ['approach', 'attack', 'search', 'expectation_search']
+    valid_types = ['approach', 'attack', 'search', 'expectation_search', 'long_search', 'catch', 'glint_machine']
 
     if behType not in valid_types:
-        raise(ValueError('not a valid behavior type. Valid behaviors are approach, attack and search'))
+        raise(ValueError("not a valid behavior type. Valid behaviors are 'approach', 'attack', 'search',"
+                         "'expectation_search', 'long_search', 'catch' and 'glint_machine'"))
 
     # check if there are existing csv-files
     fpath = 'tmp/'+behType+'.csv'
