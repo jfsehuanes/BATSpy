@@ -137,7 +137,7 @@ def specPlotKeyRelease(event):
 
     elif event.key == 'enter':
         print('disconnecting plot')
-        fig.canvas.mpl_disconnect(cid)
+        fig.canvas.mpl_disconnect(fig)
 
     pass
 
@@ -166,5 +166,5 @@ def manualCallDetectionAdjustment(fig, calls, recording):
     r = '/'.join(recording.split('/')[-3:])
     shortHeader = '_'.join([r[5:21], 'ch', r[-19], 'rec', r[-6:-4], 'seq_01'])
 
-    save_ipi_sequence(srch, 'glint_machine', shortHeader)
+    save_ipi_sequence(srch, 'long_search', shortHeader)
     exit()
