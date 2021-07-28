@@ -91,7 +91,21 @@ def call_window(dat, sr, callT, winWidth=0.030, pkWidth=0.005, nfft=2 ** 7, over
 
     # define spec window
     time = np.arange(0, len(dat)/sr, 1/sr)
-    windIdx = np.logical_and(time >= callT - winWidth/2., time <= callT + winWidth/2.)
+    lenDiff = len(time) - len(dat)
+
+    # this is a crazy fix of an error I can't understand
+    if lenDiff > 0:
+        time = time[:-lenDiff]
+
+    windIdx = np.logical_and(time >= callT - winWidth / 2., time <= callT + winWidth / 2.)
+
+    # check if current call fits into analysis window
+    if callT - winWidth/2. < 0 or callT+winWidth/2 > time[-1]:
+        print('+++++++++++++++Call window is too short for analysis. skipping call!+++++++++++++')
+        return np.nan, np.nan, np.nan, np.nan
+    elif len(windIdx) != len(dat):
+        print('+++++++++++++++weird things happened, do not ask. skipping call!+++++++++++++')
+        return np.nan, np.nan, np.nan, np.nan
 
     s, f, t = mlab.specgram(dat[windIdx], Fs=sr, NFFT=nfft,
                             noverlap=int(overlap_percent * nfft))  # Compute a high-res spectrogram of the window
@@ -250,13 +264,13 @@ if __name__ == '__main__':
                 print('analyzing call %i' % (enu+1))  # calls are not analyzed in order ;)
 
                 # compute a high res spectrogram of a defined window length
-                dur, fb, fe, pf = call_window(dat, sr, callT, plotDebug=True)
+                dur, fb, fe, pf = call_window(dat, sr, callT, plotDebug=False)
 
                 # save the debug figure
-                fig = plt.gcf()
-                fig.suptitle(seqName + '__CALL#' + '{:03}'.format(enu + 1), fontsize=14)
-                fig.savefig(path + 'plots/' + '__'.join(seqName.split('/')) + '__CALL#'+'{:03}'.format(enu+1)+'.pdf')
-                plt.close(fig)
+                # fig = plt.gcf()
+                # fig.suptitle(seqName + '__CALL#' + '{:03}'.format(enu + 1), fontsize=14)
+                # fig.savefig(path + 'plots/' + '__'.join(seqName.split('/')) + '__CALL#'+'{:03}'.format(enu+1)+'.pdf')
+                # plt.close(fig)
 
                 # save the parameters
                 callDur[enu] = dur
