@@ -44,14 +44,15 @@ def best_channel(rec_ls, calls, window_width=0.010, nfft=2 ** 8, overlap_percent
         timeBools = [np.logical_and(t >= c - window_width / 2, t <= c + window_width / 2) for c in calls]
         freqBools = np.logical_and(f >= 100000, f <= 160000)  # peak within the likely pkfreq range
 
-        callMaxAmps = np.array([np.max(d[np.ix_(freqBools, timeBools[a])]) for a in np.arange(len(timeBools))])
+        # The following lines gets the peak amplitude of every call.
+        callsPeakAmps = np.array([np.max(d[np.ix_(freqBools, timeBools[a])]) for a in np.arange(len(timeBools))])
 
         # compute the peak to noise difference
         noiseInds = np.sum(f > 250000)  # number of indices in frequency above the noise threshold of 250kHz
         noise = np.mean(np.hstack(d[:noiseInds, :]))
 
         # need to solve the cases where inf is present.
-        p2nd = np.abs(noise - callMaxAmps)
+        p2nd = callsPeakAmps - noise
         if np.isinf(p2nd).any():
             print('WARNING! found infs!!')
             p2nd = np.nan_to_num(p2nd, posinf=0., neginf=0.)  # sets infs in array to 0
@@ -246,18 +247,13 @@ if __name__ == '__main__':
         freqEnd = np.zeros(len(calls))
         peakFreq = np.zeros(len(calls))
         callsMask = np.zeros(len(calls))
+        chMask = np.zeros(len(calls))
+
         enu = 0
         for channel in set(bch):
             # load data
             dat, sr, u = load_data(recNames[channel])
             dat = np.hstack(dat)
-
-            # ToDo: need to find a way to restructure the calls. They're being analyzed shuffled
-            # Create a csv file with the sequence name as title and then the columns time, bch, call duration,
-            # fBeg, fEnd, and pkfreq
-
-            # embed()
-            # quit()
 
             for callT in calls[bch == channel]:
 
@@ -278,12 +274,13 @@ if __name__ == '__main__':
                 freqEnd[enu] = fe
                 peakFreq[enu] = pf
                 callsMask[enu] = callT
+                chMask[enu] = channel
 
                 enu += 1
 
         # Reorder the arrays and create a csv
         sortedInxs = np.argsort(callsMask)
-        paramsdf = pd.DataFrame({'callTime': callsMask[sortedInxs], 'bch': bch[sortedInxs],
+        paramsdf = pd.DataFrame({'callTime': callsMask[sortedInxs], 'bch': chMask[sortedInxs],
                                  'callDur': callDur[sortedInxs], 'fBeg': freqBeg[sortedInxs],
                                  'fEnd': freqEnd[sortedInxs], 'pkfreq': peakFreq[sortedInxs]})
         paramsdf.to_csv(path_or_buf=path + 'csvs/' + '__'.join(seqName.split('/')) + '.csv', index=False)
